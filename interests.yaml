@@ -17,7 +17,6 @@ weight_knn: 0.65
 weight_anchor: 0.35
 weight_dislike: 0.5   # cuanto resta la similitud con los 'dislikes'
 feeds_limit: 80       # maximo de articulos por feed
-label_limit: 25       # cuantos articulos muestra './run.sh train' por lote
 
 # --- descartados: temas que NO te interesan (bajan el score) ---
 # Todo lo que se parezca a estas descripciones resta weight_dislike * similitud,
@@ -37,10 +36,14 @@ dislikes:
   - >
     ofertas, descuentos, rebajas, cupones, chollos, "en oferta", recomendaciones
     y guias de compra, mejores productos para comprar, analisis de gadgets
+  - >
+    seguridad ciudadana, crimen comun, delincuencia, policia, capturas,
+    homicidios, hurtos, atracos, accidentes de transito, mafia, narcotrafico,
+    bandas criminales, conflicto armado, operativos militares, orden publico
 
 # --- texto completo ---
 # newsboat muestra el articulo sin salir de el si el feed trae <content:encoded>.
-# Para las fuentes que solo publican un encabezado (ver './run.sh check-feeds'),
+# Para las fuentes que solo publican un encabezado (ver 'python -m knnews check-feeds'),
 # knnews descarga la pagina del articulo y extrae los parrafos del cuerpo.
 fulltext: true
 fulltext_min_chars: 900   # si el contenido del feed es menor, se intenta la pagina
@@ -54,11 +57,12 @@ topics:
   - name: "Seguridad informatica"
     slug: seguridad
     description: >
-      vulnerabilidades, exploits, malware, ransomware, hacking etico y no etico,
-      ciberseguridad, analisis de ataques, filtraciones de datos, brechas,
-      leaks, hackeos, grupos de hackers, doxxing, extorsion, filtraciones
-      internas, robo de datos, forense, ingenieria inversa, phishing. Incluye
-      el chisme y el morbo: quien hackeo a quien, filtraciones y escandalos.
+      ciberseguridad, seguridad informatica, hacking, hackeos, vulnerabilidades,
+      exploits, malware, ransomware, filtraciones de datos, brechas, leaks,
+      grupos de hackers, doxxing, phishing, robo de credenciales, ciberataques,
+      analisis de ataques informaticos, forense digital, ingenieria inversa,
+      cifrado y criptografia. Incluye el chisme: quien hackeo a quien y que se
+      filtro.
   - name: "Linux / software libre"
     slug: linux
     description: >
