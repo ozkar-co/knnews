@@ -26,8 +26,10 @@ CREATE TABLE IF NOT EXISTS articles (
     score         REAL,
     anchor        REAL,
     knn           REAL,
+    dislike       REAL,
     label         INTEGER,
     labeled_at    TEXT,
+    seen_at       TEXT,
     classified_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_articles_label ON articles(label);
@@ -59,6 +61,8 @@ def _migrate(con):
     for column, ddl in (
         ("content", "ALTER TABLE articles ADD COLUMN content TEXT"),
         ("fulltext_at", "ALTER TABLE articles ADD COLUMN fulltext_at TEXT"),
+        ("dislike", "ALTER TABLE articles ADD COLUMN dislike REAL"),
+        ("seen_at", "ALTER TABLE articles ADD COLUMN seen_at TEXT"),
     ):
         if column not in columns:
             con.execute(ddl)
@@ -150,12 +154,12 @@ def articles_to_classify(con, only_unclassified=True, limit=None):
     return [row["id"] for row in con.execute(sql)]
 
 
-def set_classification(con, article_id, topic, score, anchor, knn):
+def set_classification(con, article_id, topic, score, anchor, knn, dislike=None):
     con.execute(
         """UPDATE articles
-           SET topic = ?, score = ?, anchor = ?, knn = ?, classified_at = ?
+           SET topic = ?, score = ?, anchor = ?, knn = ?, dislike = ?, classified_at = ?
            WHERE id = ?""",
-        (topic, score, anchor, knn, now(), article_id),
+        (topic, score, anchor, knn, dislike, now(), article_id),
     )
 
 
@@ -182,19 +186,6 @@ def get_vector(con, article_id):
     if not row or row["vector"] is None:
         return None
     return blob_to_vector(row["vector"])
-
-
-def unlabeled(con, limit=25):
-    return [
-        dict(row)
-        for row in con.execute(
-            """SELECT id, source, title, link, summary, topic, score
-               FROM articles
-               WHERE label IS NULL AND vector IS NOT NULL
-               ORDER BY ts DESC LIMIT ?""",
-            (limit,),
-        )
-    ]
 
 
 def set_label(con, article_id, label):

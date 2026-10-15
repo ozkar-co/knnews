@@ -146,6 +146,7 @@ DEFAULTS = {
     "topic_floor": 0.12,
     "weight_knn": 0.65,
     "weight_anchor": 0.35,
+    "weight_dislike": 0.5,
     "feeds_limit": 80,
     "label_limit": 25,
     "base_url": "",
@@ -153,6 +154,7 @@ DEFAULTS = {
     "fulltext_min_chars": 900,
     "fulltext_timeout": 20,
     "fulltext_max_chars": 300000,
+    "dislikes": [],
     "topics": DEFAULT_TOPICS,
 }
 
@@ -170,6 +172,7 @@ def _normalize(settings):
         t.setdefault("name", t["slug"])
         t.setdefault("description", t["name"])
     settings["topics"] = topics
+    settings["dislikes"] = [str(d) for d in (settings.get("dislikes") or [])]
     port = int(settings.get("port", 3010))
     settings["port"] = port
     if not settings.get("base_url"):
