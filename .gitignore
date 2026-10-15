@@ -3,11 +3,13 @@
 venv/
 env/
 
-# Estado local y datos generados (db, vectores, feeds publicados)
-data/
-*.sqlite3
-*.sqlite3-wal
-*.sqlite3-shm
+# Base de datos: SI se versiona (lleva el entrenamiento al servidor).
+# Solo se ignoran los sidecar de WAL y lo que se regenera en cada ciclo.
+data/*.sqlite3-wal
+data/*.sqlite3-shm
+data/feeds/
+data/manifest.json
+data/profile_vectors.json
 
 # Python
 __pycache__/
