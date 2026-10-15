@@ -36,3 +36,17 @@ https://www.semana.com/arc/outboundfeeds/rss/category/nacion/?outputType=xml "~s
 https://www.elespectador.com/arc/outboundfeeds/discover/category/politica/ "~elespectador/politica"
 https://www.lasillavacia.com/feed/ "~lasillavacia"
 https://cuestionpublica.com/feed/ "~cuestionpublica"
+
+# --- FUENTES TÉCNICAS (añadidas para knnews: seguridad, privacidad, IA, ciencia) ---
+https://feeds.feedburner.com/TheHackersNews "~thehackernews"
+https://www.bleepingcomputer.com/feed/ "~bleepingcomputer"
+https://unaaldia.hispasec.com/feed/ "~unaaldia"
+https://blog.segu-info.com.ar/feeds/posts/default "~seguinfo"
+https://feeds.arstechnica.com/arstechnica/index "~arstechnica"
+https://lwn.net/headlines/rss "~lwn"
+https://www.phoronix.com/rss.php "~phoronix"
+https://pluralistic.net/feed/ "~pluralistic"
+https://www.quantamagazine.org/feed/ "~quantamagazine"
+https://phys.org/rss-feed/ "~physorg"
+https://theconversation.com/articles.atom "~theconversation"
+https://www.technologyreview.com/feed/ "~technologyreview"
