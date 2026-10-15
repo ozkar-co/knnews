@@ -1,0 +1,92 @@
+# knnews · perfil de interes y ajustes de clasificacion.
+# Edita este archivo a mano. Cada tema se convierte en un feed en
+# http://<host>:3010/feeds/tema-<slug>.xml ademas del combinado /feeds/todo.xml.
+
+# --- ajustes del servicio ---
+port: 3010
+cycle_hours: 2        # cada cuantas horas corre el ciclo en modo serve
+
+# --- clasificacion ---
+# score final = weight_knn * knn + weight_anchor * similitud_al_tema
+#   knn     : fraccion ponderada de vecinos etiquetados como relevantes (0..1)
+#   anchor  : similitud coseno al tema mas cercano (aprox -1..1)
+threshold: 0.35       # score minimo para entrar en los feeds
+topic_floor: 0.12     # similitud minima para asignar un tema (si no: 'otros')
+knn_k: 15             # vecinos a considerar
+weight_knn: 0.65
+weight_anchor: 0.35
+feeds_limit: 80       # maximo de articulos por feed
+label_limit: 25       # cuantos articulos muestra './run.sh label' por defecto
+
+# --- temas de interes ---
+# name         : titulo legible (nombre del feed)
+# slug         : nombre corto usado en la URL
+# description  : texto que se vectoriza; describe el tema con tus palabras.
+topics:
+  - name: "Seguridad informatica"
+    slug: seguridad
+    description: >
+      vulnerabilidades, exploits, malware, ransomware, hacking etico,
+      ciberseguridad, analisis de ataques, filtraciones de datos, forense,
+      ingenieria inversa, phishing
+  - name: "Linux / software libre"
+    slug: linux
+    description: >
+      GNU/Linux, distribuciones, kernel, software libre y open source,
+      herramientas de linea de comandos, self-hosting, escritorio linux
+  - name: "Privacidad"
+    slug: privacidad
+    description: >
+      privacidad digital, cifrado, vigilancia masiva, derechos digitales,
+      anonimato, control de datos, grandes tecnologicas, censura
+  - name: "IA / ML"
+    slug: ia
+    description: >
+      inteligencia artificial, aprendizaje automatico, modelos de lenguaje,
+      redes neuronales, investigacion en IA, etica de la IA, agentes
+  - name: "Programacion"
+    slug: programacion
+    description: >
+      programacion, desarrollo de software, arquitectura, ingenieria de
+      software, lenguajes, rendimiento, bases de datos, ensayos tecnicos
+  - name: "Cultura digital"
+    slug: cultura-digital
+    description: >
+      internet, cultura digital, redes sociales, tecnologia y sociedad,
+      historia de la informatica, plataformas, economia de la atencion
+  - name: "Ciencia"
+    slug: ciencia
+    description: >
+      divulgacion cientifica, fisica, biologia, astronomia, investigacion,
+      descubrimientos, medio ambiente, clima
+  - name: "Colombia"
+    slug: colombia
+    description: >
+      politica y sociedad colombiana, conflicto armado, corrupcion, economia
+      de Colombia, justicia, actualidad nacional
+  - name: "Internacional"
+    slug: internacional
+    description: >
+      geopolitica, relaciones internacionales, conflictos, politica mundial,
+      America Latina, medio oriente
+  - name: "Economia"
+    slug: economia
+    description: >
+      economia, mercados, macroeconomia, crisis financiera, desigualdad,
+      trabajo, vivienda
+  - name: "Ensayos / pensamiento"
+    slug: ensayos
+    description: >
+      ensayos largos, pensamiento, filosofia, blogs personales, opinion
+      profunda sobre tecnologia, ideas y sociedad
+  - name: "Videojuegos"
+    slug: videojuegos
+    description: >
+      videojuegos, industria del videojuego, analisis de juegos, consolas,
+      PC gaming, retro gaming
+  - name: "Autosostenibilidad / libertad"
+    slug: autosostenibilidad
+    description: >
+      autosostenibilidad, vida offgrid, permacultura, libertad individual,
+      autogobernanza, soberania, tecnologia apropiada, energias renovables,
+      comunidad y descentralizacion
