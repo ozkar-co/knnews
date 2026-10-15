@@ -1,10 +1,7 @@
 #!/usr/bin/env bash
-# knnews · punto de entrada. Crea el venv, instala dependencias y arranca.
-#   ./run.sh            -> servidor + planificador cada 2 horas (puerto 3010)
-#   ./run.sh cycle      -> un ciclo completo ahora
-#   ./run.sh label      -> minientrenamiento interactivo (y/n)
-#   ./run.sh classify   -> recalcular y republicar feeds
-#   ./run.sh stats      -> estadisticas
+# knnews · punto de entrada. Crea el venv, instala dependencias y arranca el
+# servicio: servidor en el puerto 3010 y actualizacion cada 2 horas.
+#   ./run.sh
 set -euo pipefail
 cd "$(dirname "$0")"
 

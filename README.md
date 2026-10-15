@@ -41,16 +41,12 @@ urls ──feedparser──> articulos ──embed (384d)──> score ──> R
 ## Uso
 
 ```bash
-./run.sh              # servicio: servidor en :3010 + ciclo cada 2h
-./run.sh cycle        # un ciclo completo ahora (leer, vectorizar, clasificar, publicar)
-./run.sh classify     # recalcular la clasificacion y republicar los feeds
-./run.sh embed        # vectoriza solo los articulos pendientes
-./run.sh stats        # estadisticas de la base
-./run.sh check-feeds  # audita si cada fuente trae el texto completo o solo un encabezado
+./run.sh     # arranca el servicio en :3010 (el ciclo corre cada 2 horas)
 ```
 
-`run.sh` crea un virtualenv en `.venv/`, instala las dependencias y ejecuta el
-modulo `knnews`. Si no le pasas argumentos, arranca `serve`.
+`run.sh` crea un virtualenv en `.venv/`, instala las dependencias y arranca el
+servicio. Es lo unico que hay que ejecutar. Los comandos de mantenimiento viven
+en el modulo interno (`python -m knnews`) y no hacen falta en el uso normal.
 
 ## Configuracion: `interests.yaml`
 
@@ -71,7 +67,7 @@ modulo `knnews`. Si no le pasas argumentos, arranca `serve`.
 | `topics`       | lista de temas: `name`, `slug` y `description` (texto que se vectoriza). |
 
 Cada tema genera un feed `tema-<slug>.xml`. Anade, quita o reescribe temas y
-corre `./run.sh classify` para regenerar.
+corre `python -m knnews classify` para regenerar.
 
 ## Fuentes: `urls`
 
@@ -107,9 +103,9 @@ Quanta…) dan un resumen, y otras (The Hacker News, BleepingComputer, phys.org,
 Phoronix) solo un encabezado.
 
 Para esas ultimas, con `fulltext: true` knnews descarga la pagina del articulo y
-extrae los parrafos del cuerpo, de modo que tambien se lean completas. Usa
-`./run.sh check-feeds` para ver el veredicto de cada fuente y decidir si merece
-la pena mantenerla.
+extrae los parrafos del cuerpo, de modo que tambien se lean completas. Con
+`python -m knnews check-feeds` ves el veredicto de cada fuente y si merece la
+pena mantenerla.
 
 ## Despliegue en un servidor
 
@@ -123,7 +119,7 @@ After=network-online.target
 
 [Service]
 WorkingDirectory=/opt/knnews
-ExecStart=/opt/knnews/run.sh serve
+ExecStart=/opt/knnews/run.sh
 Restart=on-failure
 Environment=KNNEWS_PORT=3010
 
@@ -142,7 +138,7 @@ El perfil tiene dos partes y **no hay comandos interactivos**:
   interesa (`dislikes`, que restan score). Se pueden editar a mano.
 
 El servicio clasifica en cada ciclo sin intervencion. Para revisar o forzar una
-reclasificacion tras cambiar `interests.yaml`: `./run.sh classify`.
+reclasificacion tras cambiar `interests.yaml`: `python -m knnews classify`.
 
 La base `data/knnews.sqlite3` **se versiona en git** para que el perfil ya
 entrenado viaje al servidor. Se ignoran los sidecar WAL y lo que se regenera
