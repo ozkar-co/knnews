@@ -1,0 +1,38 @@
+# --- ENSAYOS (publican cuando hay algo, no noticiero) ---
+https://jvns.ca/atom.xml "~jvns"
+https://danluu.com/atom.xml "~danluu"
+https://www.schneier.com/feed/atom/ "~schneier"
+https://hackaday.com/blog/feed/ "~hackaday"
+https://solar.lowtechmagazine.com/feeds/all-en.atom.xml "~lowtechmagazine"
+https://www.filfre.net/feed/ "~filfre"
+
+# --- VIDEOJUEGOS ---
+https://www.vidaextra.com/index.xml "~vidaextra"
+
+# --- FEEDS EN ESPAÑOL ---
+https://blog.desdelinux.net/feed/ "~desdelinux"
+https://nosgustalinux.es/feed/ "~nosgustalinux"
+https://www.muylinux.com/feed/ "~muylinux"
+https://www.linuxadictos.com/feed "~linuxadictos"
+https://ubunlog.com/feed "~ubunlog"
+https://www.hipertextual.com/feed "~hipertextual"
+https://www.xataka.com/index.xml "~xataka"
+https://www.redeszone.net/feed "~redeszone"
+https://blogthinkbig.com/feed "~thinkbig"
+https://www.enriquedans.com/feed "~enriquedans"
+https://www.microsiervos.com/index.xml "~microsiervos"
+https://www.nosolohacking.info/feed/ "~nosolohacking"
+https://securelist.lat/feed/ "~securelist"
+#https://www.welivesecurity.com/feed/ "~welivesecurity"
+https://culturacientifica.com/feed/ "~culturacientifica"
+#https://www.agenciasinc.es/feed "~agenciasinc"
+https://www.eldiario.es/rss/ciencia/ "~eldiario/ciencia"
+https://www.eldiario.es/rss/internacional/ "~eldiario/internacional"
+https://www.eldiario.es/rss/economia/ "~eldiario/economia"
+https://www.eldiario.es/rss/tecnologia/ "~eldiario/tecnologia"
+
+# --- COLOMBIA ---
+https://www.semana.com/arc/outboundfeeds/rss/category/nacion/?outputType=xml "~semana/nacion"
+https://www.elespectador.com/arc/outboundfeeds/discover/category/politica/ "~elespectador/politica"
+https://www.lasillavacia.com/feed/ "~lasillavacia"
+https://cuestionpublica.com/feed/ "~cuestionpublica"
