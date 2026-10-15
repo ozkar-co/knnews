@@ -4,7 +4,7 @@ import argparse
 import sys
 import textwrap
 
-from . import classify, config, feeds, ingest, service, store
+from . import audit, classify, config, feeds, ingest, service, store
 
 
 def cmd_serve(args):
@@ -88,6 +88,10 @@ def cmd_stats(args):
     con.close()
 
 
+def cmd_check_feeds(args):
+    audit.run()
+
+
 def cmd_feeds(args):
     con = store.connect()
     store.init(con)
@@ -116,6 +120,8 @@ def build_parser():
 
     sub.add_parser("stats", help="estadisticas de la base")
 
+    sub.add_parser("check-feeds", help="audita si cada fuente trae el texto completo")
+
     return parser
 
 
@@ -131,6 +137,7 @@ def main(argv=None):
         "embed": cmd_embed,
         "label": cmd_label,
         "stats": cmd_stats,
+        "check-feeds": cmd_check_feeds,
     }
     handlers[command](args)
 

@@ -9,7 +9,7 @@ from pathlib import Path
 
 import feedparser
 
-from . import config, embed, store
+from . import config, embed, fulltext, store
 
 TAG_RE = re.compile(r'^(?P<url>\S+)(?:\s+"~(?P<tag>.+)")?\s*$')
 TAGS_RE = re.compile(r"<[^>]+>")
@@ -56,6 +56,7 @@ def _timestamp(entry):
 def fetch_feed(url, tag):
     socket.setdefaulttimeout(config.FETCH_TIMEOUT)
     parsed = feedparser.parse(url, agent=config.USER_AGENT)
+    max_chars = config.settings().get("fulltext_max_chars", 300000)
     items = []
     for entry in parsed.entries:
         link = entry.get("link") or ""
@@ -63,12 +64,21 @@ def fetch_feed(url, tag):
         if not guid:
             continue
         title = clean_html(entry.get("title"))
-        summary = clean_html(entry.get("summary"))
-        if not summary and entry.get("content"):
-            summary = clean_html(entry["content"][0].get("value", ""))
-        text = f"{title}\n{summary}".strip()[:TEXT_LIMIT]
         if not title:
             continue
+
+        content_html = ""
+        if entry.get("content"):
+            content_html = entry["content"][0].get("value", "")
+        if not content_html:
+            content_html = entry.get("summary", "")
+        content_html = content_html[:max_chars]
+
+        summary = clean_html(entry.get("summary"))
+        if not summary and content_html:
+            summary = clean_html(content_html)
+
+        text = f"{title}\n{summary}".strip()[:TEXT_LIMIT]
         items.append(
             {
                 "guid": guid,
@@ -76,6 +86,7 @@ def fetch_feed(url, tag):
                 "title": title,
                 "link": link,
                 "summary": summary[:1200],
+                "content": content_html,
                 "published": entry.get("published") or entry.get("updated") or "",
                 "ts": _timestamp(entry),
                 "fetched_at": store.now(),
@@ -115,3 +126,28 @@ def embed_pending(con, log=print):
         store.set_vector(con, row["id"], vec)
     log(f"vectorizados {len(rows)} articulos")
     return len(rows)
+
+
+def enrich_fulltext(con, log=print):
+    """Descarga el articulo completo de las fuentes que solo dan encabezado."""
+    settings = config.settings()
+    if not settings.get("fulltext", True):
+        return 0
+    min_chars = int(settings.get("fulltext_min_chars", 900))
+    rows = store.articles_needing_fulltext(con, min_chars)
+    if not rows:
+        log("no hay articulos que necesiten texto completo")
+        return 0
+    log(f"buscando texto completo en {len(rows)} articulos")
+    fetched = 0
+    for row in rows:
+        body = None
+        try:
+            body = fulltext.fetch_article(row["link"])
+        except Exception:  # noqa: BLE001 - un fallo puntual no aborta
+            body = None
+        if body:
+            fetched += 1
+        store.set_fulltext(con, row["id"], body)
+    log(f"texto completo obtenido en {fetched}/{len(rows)} articulos")
+    return fetched

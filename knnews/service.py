@@ -15,11 +15,13 @@ def run_cycle(log=print):
     try:
         new = ingest.ingest_all(con, log=log)
         embedded = ingest.embed_pending(con, log=log)
+        enriched = ingest.enrich_fulltext(con, log=log)
         classify.classify_all(con, settings, only_unclassified=True, log=log)
         manifest = feeds.publish(con, settings, log=log)
     finally:
         con.close()
-    return {"nuevos": new, "vectorizados": embedded, "feeds": len(manifest)}
+    return {"nuevos": new, "vectorizados": embedded, "con_texto": enriched,
+            "feeds": len(manifest)}
 
 
 def start_scheduler(log=print):

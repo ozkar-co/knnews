@@ -18,6 +18,14 @@ weight_anchor: 0.35
 feeds_limit: 80       # maximo de articulos por feed
 label_limit: 25       # cuantos articulos muestra './run.sh label' por defecto
 
+# --- texto completo ---
+# newsboat muestra el articulo sin salir de el si el feed trae <content:encoded>.
+# Para las fuentes que solo publican un encabezado (ver './run.sh check-feeds'),
+# knnews descarga la pagina del articulo y extrae los parrafos del cuerpo.
+fulltext: true
+fulltext_min_chars: 900   # si el contenido del feed es menor, se intenta la pagina
+fulltext_timeout: 20
+
 # --- temas de interes ---
 # name         : titulo legible (nombre del feed)
 # slug         : nombre corto usado en la URL

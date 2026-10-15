@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS articles (
     ts            INTEGER,
     fetched_at    TEXT,
     text          TEXT,
+    content       TEXT,
+    fulltext_at   TEXT,
     vector        BLOB,
     topic         TEXT,
     score         REAL,
@@ -48,7 +50,18 @@ def connect():
 
 def init(con):
     con.executescript(SCHEMA)
+    _migrate(con)
     con.commit()
+
+
+def _migrate(con):
+    columns = {row["name"] for row in con.execute("PRAGMA table_info(articles)")}
+    for column, ddl in (
+        ("content", "ALTER TABLE articles ADD COLUMN content TEXT"),
+        ("fulltext_at", "ALTER TABLE articles ADD COLUMN fulltext_at TEXT"),
+    ):
+        if column not in columns:
+            con.execute(ddl)
 
 
 def vector_to_blob(vec):
@@ -64,8 +77,8 @@ def upsert_article(con, art, vector=None):
     blob = vector_to_blob(vector) if vector is not None else None
     cur = con.execute(
         """INSERT OR IGNORE INTO articles
-           (guid, source, title, link, summary, published, ts, fetched_at, text, vector)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           (guid, source, title, link, summary, published, ts, fetched_at, text, content, vector)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             art["guid"],
             art["source"],
@@ -76,11 +89,40 @@ def upsert_article(con, art, vector=None):
             art["ts"],
             art["fetched_at"],
             art["text"],
+            art.get("content"),
             blob,
         ),
     )
+    inserted = cur.rowcount > 0
+    if not inserted:
+        # rellena el contenido de articulos ya existentes que no lo tenian
+        con.execute(
+            "UPDATE articles SET content = ? WHERE guid = ? AND content IS NULL AND ? IS NOT NULL",
+            (art.get("content"), art["guid"], art.get("content")),
+        )
     con.commit()
-    return cur.rowcount > 0
+    return inserted
+
+
+def articles_needing_fulltext(con, min_chars, limit=200):
+    return [
+        dict(row)
+        for row in con.execute(
+            """SELECT id, link, content FROM articles
+               WHERE fulltext_at IS NULL AND link != ''
+                 AND (content IS NULL OR length(content) < ?)
+               ORDER BY ts DESC LIMIT ?""",
+            (min_chars, limit),
+        )
+    ]
+
+
+def set_fulltext(con, article_id, content):
+    con.execute(
+        "UPDATE articles SET content = COALESCE(?, content), fulltext_at = ? WHERE id = ?",
+        (content, now(), article_id),
+    )
+    con.commit()
 
 
 def articles_without_vector(con, limit=1000):
@@ -167,7 +209,7 @@ def for_feed(con, min_score, limit):
     return [
         dict(row)
         for row in con.execute(
-            """SELECT id, guid, source, title, link, summary, ts, topic, score
+            """SELECT id, guid, source, title, link, summary, content, ts, topic, score
                FROM articles
                WHERE vector IS NOT NULL AND score IS NOT NULL AND score >= ?
                ORDER BY ts DESC LIMIT ?""",

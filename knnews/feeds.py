@@ -24,7 +24,8 @@ def build_rss(channel_title, channel_desc, self_link, items):
     now = formatdate(localtime=False, usegmt=True)
     out = [
         '<?xml version="1.0" encoding="UTF-8"?>',
-        '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">',
+        '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" '
+        'xmlns:content="http://purl.org/rss/1.0/modules/content/">',
         "<channel>",
         f"<title>{_esc(channel_title)}</title>",
         f"<link>{_esc(self_link)}</link>",
@@ -39,18 +40,21 @@ def build_rss(channel_title, channel_desc, self_link, items):
             else now
         )
         score = art.get("score") or 0.0
-        body = f"<p>{_esc(art.get('summary'))}</p>" if art.get("summary") else ""
-        body += (
+        foot = (
             f"<p><small>[{_esc(art.get('source'))} · "
             f"{_esc(art.get('topic'))} · {score:.2f}]</small></p>"
         )
+        summary = f"<p>{_esc(art.get('summary'))}</p>" if art.get("summary") else ""
+        # newsboat prefiere content:encoded; si no hay, usa el resumen.
+        full = art.get("content") or summary
         out += [
             "<item>",
             f"<title>{_esc(art.get('title'))}</title>",
             f"<link>{_esc(art.get('link'))}</link>",
             f'<guid isPermaLink="false">{_esc(art.get("guid"))}</guid>',
             f"<pubDate>{pub}</pubDate>",
-            f"<description>{_cdata(body)}</description>",
+            f"<description>{_cdata(summary + foot)}</description>",
+            f"<content:encoded>{_cdata(full + foot)}</content:encoded>",
             "</item>",
         ]
     out += ["</channel>", "</rss>"]

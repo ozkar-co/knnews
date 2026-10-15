@@ -149,6 +149,10 @@ DEFAULTS = {
     "feeds_limit": 80,
     "label_limit": 25,
     "base_url": "",
+    "fulltext": True,
+    "fulltext_min_chars": 900,
+    "fulltext_timeout": 20,
+    "fulltext_max_chars": 300000,
     "topics": DEFAULT_TOPICS,
 }
 

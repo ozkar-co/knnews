@@ -45,6 +45,7 @@ urls ──feedparser──> articulos ──embed (384d)──> score ──> R
 ./run.sh classify   # recalcula la clasificacion y republica los feeds
 ./run.sh embed      # vectoriza solo los articulos pendientes
 ./run.sh stats      # estadisticas de la base
+./run.sh check-feeds  # audita si cada fuente trae el texto completo o solo un encabezado
 ```
 
 `run.sh` crea un virtualenv en `.venv/`, instala las dependencias y ejecuta el
@@ -62,6 +63,8 @@ modulo `knnews`. Si no le pasas argumentos, arranca `serve`.
 | `weight_knn` / `weight_anchor` | peso del KNN y de las anclas en el score final.     |
 | `feeds_limit`  | maximo de articulos por feed.                                      |
 | `base_url`     | URL publica para los self-links (pon la de tu tunel).             |
+| `fulltext`     | intenta descargar el articulo completo de fuentes que solo dan teaser. |
+| `fulltext_min_chars` | umbral de contenido por debajo del cual se intenta la pagina. |
 | `topics`       | lista de temas: `name`, `slug` y `description` (texto que se vectoriza). |
 
 Cada tema genera un feed `tema-<slug>.xml`. Anade, quita o reescribe temas y
@@ -91,6 +94,19 @@ En newsboat suscribe las URLs del tunel, p.ej.:
 https://noticias.ejemplo.net/feeds/tema-seguridad.xml
 https://noticias.ejemplo.net/feeds/tema-linux.xml
 ```
+
+## Contenido completo
+
+Los feeds se emiten con `<content:encoded>`, que es lo que newsboat muestra al
+abrir un articulo (sin salir del lector). La mayoria de las fuentes ya traen el
+texto entero en su `<description>`; unas pocas (Ars Technica, LWN, Schneier,
+Quanta…) dan un resumen, y otras (The Hacker News, BleepingComputer, phys.org,
+Phoronix) solo un encabezado.
+
+Para esas ultimas, con `fulltext: true` knnews descarga la pagina del articulo y
+extrae los parrafos del cuerpo, de modo que tambien se lean completas. Usa
+`./run.sh check-feeds` para ver el veredicto de cada fuente y decidir si merece
+la pena mantenerla.
 
 ## Despliegue en un servidor
 
