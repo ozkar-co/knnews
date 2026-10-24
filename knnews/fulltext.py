@@ -5,6 +5,9 @@ con la libreria estandar: descarga el HTML y toma los parrafos del cuerpo del
 articulo (`<article>`/`<main>` si existen, si no, todos los parrafos largos).
 """
 
+import ipaddress
+import socket
+import urllib.parse
 import urllib.request
 from html.parser import HTMLParser
 
@@ -13,6 +16,40 @@ from . import config
 SKIP_TAGS = {"script", "style", "noscript", "template"}
 BLOCK_TAGS = {"article", "main"}
 MIN_PARAGRAPH = 40
+
+
+def _is_public_host(host):
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror:
+        return False
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_reserved
+            or ip.is_multicast
+            or ip.is_unspecified
+        ):
+            return False
+    return True
+
+
+def _validate_url(url):
+    parts = urllib.parse.urlsplit(url)
+    if parts.scheme not in ("http", "https"):
+        raise ValueError(f"esquema no permitido: {parts.scheme}")
+    if not parts.hostname or not _is_public_host(parts.hostname):
+        raise ValueError(f"host no permitido: {parts.hostname}")
+    return url
+
+
+class _SafeRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        _validate_url(newurl)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
 class _Extractor(HTMLParser):
@@ -71,8 +108,11 @@ def extract_paragraphs(html):
 def fetch_article(url, timeout=None):
     """Devuelve HTML `<p>...</p>` del cuerpo, o None si no se pudo."""
     timeout = timeout or config.settings().get("fulltext_timeout", 20)
+    _validate_url(url)
     req = urllib.request.Request(url, headers={"User-Agent": config.USER_AGENT})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
+    opener = urllib.request.build_opener(_SafeRedirect)
+    with opener.open(req, timeout=timeout) as resp:
+        _validate_url(resp.geturl())
         raw = resp.read(2_000_000)
         encoding = resp.headers.get_content_charset() or "utf-8"
     html = raw.decode(encoding, "replace")

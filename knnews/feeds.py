@@ -1,9 +1,33 @@
-"""Generacion de los RSS de salida (uno por tema + combinado)."""
+"""Generacion de los RSS de salida (mismos feeds que ya usas)."""
 
 import json
+import re
 from email.utils import formatdate
 
 from . import config, store
+
+STOPWORDS = {
+    "para", "como", "este", "esta", "esto", "sobre", "desde", "hasta", "entre",
+    "cuando", "donde", "porque", "pero", "mas", "más", "los", "las", "del",
+    "que", "con", "por", "una", "uno", "unos", "unas", "sus", "sin", "son",
+}
+
+AD_RE = re.compile(
+    r"^(EMPLEO|VENTA|ARRIENDO|COMPRO|BUSCO|OFERTA|SERVICIO|CASA|APARTAMENTO|"
+    r"LOTE|TERRENO|PORTADA|EDICION)\b",
+    re.IGNORECASE,
+)
+
+
+def _tokens(title):
+    words = re.findall(r"[a-záéíóúñü0-9]{4,}", (title or "").lower())
+    return {word for word in words if word not in STOPWORDS}
+
+
+def _jaccard(a, b):
+    if not a or not b:
+        return 0.0
+    return len(a & b) / len(a | b)
 
 
 def _esc(value):
@@ -40,12 +64,13 @@ def build_rss(channel_title, channel_desc, self_link, items):
             else now
         )
         score = art.get("score") or 0.0
+        importance = art.get("importance") or 0.0
         foot = (
             f"<p><small>[{_esc(art.get('source'))} · "
-            f"{_esc(art.get('topic'))} · {score:.2f}]</small></p>"
+            f"{_esc(art.get('topic'))} · rel {score:.2f} · imp {importance:.2f}]"
+            "</small></p>"
         )
         summary = f"<p>{_esc(art.get('summary'))}</p>" if art.get("summary") else ""
-        # newsboat prefiere content:encoded; si no hay, usa el resumen.
         full = art.get("content") or summary
         out += [
             "<item>",
@@ -61,22 +86,79 @@ def build_rss(channel_title, channel_desc, self_link, items):
     return "\n".join(out)
 
 
+def _decorate(art):
+    try:
+        flags = json.loads(art.get("flags") or "{}")
+    except (ValueError, TypeError):
+        flags = {}
+    if flags.get("hard_excluded"):
+        return None
+    art["_combined"] = 0.6 * (art.get("score") or 0.0) + 0.4 * (art.get("importance") or 0.0)
+    return art
+
+
+def _prepare(candidates):
+    """Descarta excluidos, deduplica por evento y puntua para ordenar."""
+    best = {}
+    for raw in candidates:
+        art = _decorate(raw)
+        if art is None:
+            continue
+        key = art.get("cluster_id") or f"a{art['id']}"
+        current = best.get(key)
+        if current is None or art["_combined"] > current["_combined"]:
+            best[key] = art
+    ranked = sorted(
+        best.values(),
+        key=lambda a: (a["_combined"], a.get("ts") or 0),
+        reverse=True,
+    )
+    # dedup por titulo (sindicacion / mismo hecho con otra redaccion)
+    kept = []
+    kept_tokens = []
+    for art in ranked:
+        toks = _tokens(art.get("title"))
+        if any(_jaccard(toks, other) >= 0.55 for other in kept_tokens):
+            continue
+        kept.append(art)
+        kept_tokens.append(toks)
+    return kept
+
+
+def _take(items, limit, max_per_source):
+    out = []
+    counts = {}
+    for art in items:
+        source = art.get("source") or "?"
+        if counts.get(source, 0) >= max_per_source:
+            continue
+        counts[source] = counts.get(source, 0) + 1
+        out.append(art)
+        if len(out) >= limit:
+            break
+    return out
+
+
 def publish(con, settings, log=print):
     config.FEEDS_DIR.mkdir(parents=True, exist_ok=True)
-    threshold = float(settings.get("threshold", 0.35))
+    threshold = float(settings.get("threshold", 0.32))
+    importance_threshold = float(settings.get("importance_threshold", 0.50))
     limit = int(settings.get("feeds_limit", 80))
+    max_per_source = int(settings.get("max_per_source", 8))
     base = settings["base_url"].rstrip("/")
 
-    articles = store.for_feed(con, threshold, limit)
+    ranked = _prepare(store.feed_candidates(con, threshold, importance_threshold))
     by_topic = {}
-    for art in articles:
+    for art in ranked:
         by_topic.setdefault(art.get("topic") or "otros", []).append(art)
 
     manifest = []
 
     def _write(slug, title, desc, items):
         path = config.FEEDS_DIR / f"{slug}.xml"
-        path.write_text(build_rss(title, desc, f"{base}/feeds/{slug}.xml", items), encoding="utf-8")
+        path.write_text(
+            build_rss(title, desc, f"{base}/feeds/{slug}.xml", items), encoding="utf-8"
+        )
         manifest.append(
             {
                 "slug": slug,
@@ -90,23 +172,61 @@ def publish(con, settings, log=print):
     _write(
         "todo",
         "knnews · todo relevante",
-        "Articulos filtrados por encima del umbral, todos los temas.",
-        articles,
+        "Articulos relevantes e importantes, todos los temas.",
+        _take(ranked, limit, max_per_source),
     )
+    local_sources = settings.get("local_sources") or []
+    local_per_source = int(settings.get("local_per_source", 3))
     for topic in settings["topics"]:
         slug = topic["slug"]
-        items = by_topic.get(slug, [])
-        if not items:
-            continue
+        items = list(by_topic.get(slug, []))
+        if slug == "colombia" and local_sources:
+            local = []
+            for raw in store.local_candidates(con, local_sources, 400):
+                art = _decorate(raw)
+                if art is None:
+                    continue
+                title = art.get("title") or ""
+                if AD_RE.match(title) or len(title.split()) < 3:
+                    continue
+                if art["_combined"] < 0.12:
+                    continue
+                lr = art.get("llm_relevance") or 0
+                if lr < 2 and (art.get("importance") or 0) < 0.35:
+                    continue
+                try:
+                    llm_flags = json.loads(art.get("llm_flags") or "{}")
+                except (ValueError, TypeError):
+                    llm_flags = {}
+                if not llm_flags.get("local_pereira") and (art.get("importance") or 0) < 0.35:
+                    continue
+                local.append(art)
+            local.sort(
+                key=lambda a: (a["_combined"], a.get("ts") or 0), reverse=True
+            )
+            counts = {}
+            picked = []
+            for art in local:
+                source = art.get("source")
+                if counts.get(source, 0) >= local_per_source:
+                    continue
+                counts[source] = counts.get(source, 0) + 1
+                picked.append(art)
+            items = _prepare(list(items) + picked)
+        selected = _take(items, limit, max_per_source)
         _write(
             f"tema-{slug}",
             f"knnews · {topic['name']}",
-            f"Articulos relevantes de {topic['name']}.",
-            items,
+            f"Articulos de {topic['name']}.",
+            selected,
         )
 
     config.MANIFEST_PATH.write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
     )
+    keep = {f"{entry['slug']}.xml" for entry in manifest}
+    for stale in config.FEEDS_DIR.glob("*.xml"):
+        if stale.name not in keep:
+            stale.unlink()
     log(f"publicados {len(manifest)} feeds en {config.FEEDS_DIR}")
     return manifest
