@@ -3,7 +3,7 @@
 import argparse
 import sys
 
-from . import audit, classify, config, feeds, ingest, service, store
+from . import audit, bootstrap, classify, config, feeds, ingest, service, store
 
 
 def cmd_serve(args):
@@ -49,6 +49,23 @@ def cmd_check_feeds(args):
     audit.run()
 
 
+def cmd_bootstrap(args):
+    bootstrap.run(
+        limit=args.limit,
+        workers=args.workers,
+        dry_run=args.dry_run,
+        force=args.force,
+        derive_only=args.derive_only,
+    )
+
+
+def cmd_validate(args):
+    con = store.connect()
+    store.init(con)
+    print(bootstrap.validate(con))
+    con.close()
+
+
 def build_parser():
     parser = argparse.ArgumentParser(prog="knnews", description="Filtro personal de noticias")
     sub = parser.add_subparsers(dest="command")
@@ -59,6 +76,15 @@ def build_parser():
     sub.add_parser("embed", help="vectorizar articulos pendientes")
     sub.add_parser("stats", help="estadisticas de la base")
     sub.add_parser("check-feeds", help="audita si cada fuente trae el texto completo")
+
+    boot = sub.add_parser("bootstrap", help="etiquetado offline con LLM (una sola vez)")
+    boot.add_argument("--limit", type=int, default=None)
+    boot.add_argument("--workers", type=int, default=8)
+    boot.add_argument("--dry-run", action="store_true")
+    boot.add_argument("--force", action="store_true")
+    boot.add_argument("--derive-only", action="store_true")
+
+    sub.add_parser("validate", help="comparar el bootstrap con las etiquetas previas")
 
     return parser
 
@@ -74,6 +100,8 @@ def main(argv=None):
         "embed": cmd_embed,
         "stats": cmd_stats,
         "check-feeds": cmd_check_feeds,
+        "bootstrap": cmd_bootstrap,
+        "validate": cmd_validate,
     }
     handlers[command](args)
 
