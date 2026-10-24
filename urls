@@ -14,7 +14,6 @@ https://blog.desdelinux.net/feed/ "~desdelinux"
 https://nosgustalinux.es/feed/ "~nosgustalinux"
 https://www.muylinux.com/feed/ "~muylinux"
 https://www.linuxadictos.com/feed "~linuxadictos"
-https://ubunlog.com/feed "~ubunlog"
 https://www.hipertextual.com/feed "~hipertextual"
 https://www.xataka.com/index.xml "~xataka"
 https://www.redeszone.net/feed "~redeszone"
@@ -49,3 +48,13 @@ https://pluralistic.net/feed/ "~pluralistic"
 https://www.quantamagazine.org/feed/ "~quantamagazine"
 https://phys.org/rss-feed/ "~physorg"
 https://www.technologyreview.com/feed/ "~technologyreview"
+
+# --- IA (en ingles: decisiones, industria, investigacion) ---
+https://www.theverge.com/rss/ai-artificial-intelligence/index.xml "~theverge/ai"
+https://techcrunch.com/category/artificial-intelligence/feed/ "~techcrunch/ai"
+https://www.technologyreview.com/topic/artificial-intelligence/feed/ "~technologyreview/ia"
+
+# --- EUROPA (politica, protestas, UE) ---
+https://feeds.bbci.co.uk/news/world/europe/rss.xml "~bbc/europa"
+https://www.politico.eu/feed/ "~politico/europa"
+https://www.france24.com/en/europe/rss "~france24/europa"

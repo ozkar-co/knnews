@@ -39,7 +39,7 @@ dislikes:
   - >
     seguridad ciudadana, crimen comun, delincuencia, policia, capturas,
     homicidios, hurtos, atracos, accidentes de transito, mafia, narcotrafico,
-    bandas criminales, conflicto armado, operativos militares, orden publico
+    bandas criminales, conflicto armado, operativos militares
 
 # --- texto completo ---
 # newsboat muestra el articulo sin salir de el si el feed trae <content:encoded>.
@@ -76,8 +76,12 @@ topics:
   - name: "IA / ML"
     slug: ia
     description: >
-      inteligencia artificial, aprendizaje automatico, modelos de lenguaje,
-      redes neuronales, investigacion en IA, etica de la IA, agentes
+      inteligencia artificial, machine learning, aprendizaje automatico,
+      modelos de lenguaje grandes LLM, GPT, ChatGPT, Claude, Gemini, redes
+      neuronales, investigacion en IA, etica y seguridad de la IA, agentes,
+      regulacion de la IA, politicas y decisiones de gobiernos, lanzamientos
+      de modelos de IA, industria de la IA, OpenAI, Anthropic, Google DeepMind,
+      Meta AI
   - name: "Programacion"
     slug: programacion
     description: >
@@ -126,3 +130,10 @@ topics:
       autosostenibilidad, vida offgrid, permacultura, libertad individual,
       autogobernanza, soberania, tecnologia apropiada, energias renovables,
       comunidad y descentralizacion
+  - name: "Europa"
+    slug: europa
+    description: >
+      noticias de Europa, Union Europea, politica europea, protestas y
+      manifestaciones, elecciones en Europa, Francia, Alemania, Italia, Reino
+      Unido, Espana, Bruselas, decisiones de la UE, crisis social y movimientos
+      ciudadanos
