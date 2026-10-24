@@ -203,6 +203,7 @@ def for_feed(con, min_score, limit):
             """SELECT id, guid, source, title, link, summary, content, ts, topic, score
                FROM articles
                WHERE vector IS NOT NULL AND score IS NOT NULL AND score >= ?
+                 AND (label IS NULL OR label = 1)
                ORDER BY ts DESC LIMIT ?""",
             (min_score, limit),
         )
