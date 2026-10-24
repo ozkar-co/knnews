@@ -6,6 +6,7 @@ articulo (`<article>`/`<main>` si existen, si no, todos los parrafos largos).
 """
 
 import ipaddress
+import re
 import socket
 import urllib.parse
 import urllib.request
@@ -16,6 +17,14 @@ from . import config
 SKIP_TAGS = {"script", "style", "noscript", "template"}
 BLOCK_TAGS = {"article", "main"}
 MIN_PARAGRAPH = 40
+BOILERPLATE_RE = re.compile(
+    r"^(edited by|this article has been reviewed|editors have highlighted|"
+    r"science x|provided by|citation:|doi:|journal information|explore further|"
+    r"more information|this document is subject to copyright|"
+    r"apart from any fair dealing|the content is provided for information|"
+    r"reprinted|image credit|credit:|story source|source:)",
+    re.IGNORECASE,
+)
 
 
 def _is_public_host(host):
@@ -80,7 +89,7 @@ class _Extractor(HTMLParser):
         if tag == "p" and self._in_p:
             self._in_p = False
             text = " ".join("".join(self._buffer).split())
-            if len(text) >= MIN_PARAGRAPH:
+            if len(text) >= MIN_PARAGRAPH and not BOILERPLATE_RE.match(text):
                 self.all_paragraphs.append(text)
                 if self._depth_article > 0:
                     self.article_paragraphs.append(text)

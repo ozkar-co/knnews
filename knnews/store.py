@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS articles (
     text          TEXT,
     content       TEXT,
     fulltext_at   TEXT,
+    fulltext_tries INTEGER DEFAULT 0,
     vector        BLOB,
     topic         TEXT,
     score         REAL,
@@ -86,6 +87,7 @@ def _migrate(con):
     for column, ddl in (
         ("content", "ALTER TABLE articles ADD COLUMN content TEXT"),
         ("fulltext_at", "ALTER TABLE articles ADD COLUMN fulltext_at TEXT"),
+        ("fulltext_tries", "ALTER TABLE articles ADD COLUMN fulltext_tries INTEGER DEFAULT 0"),
         ("dislike", "ALTER TABLE articles ADD COLUMN dislike REAL"),
         ("seen_at", "ALTER TABLE articles ADD COLUMN seen_at TEXT"),
         ("importance", "ALTER TABLE articles ADD COLUMN importance REAL"),
@@ -153,7 +155,7 @@ def articles_needing_fulltext(con, min_chars, limit=200):
         dict(row)
         for row in con.execute(
             """SELECT id, link, content FROM articles
-               WHERE fulltext_at IS NULL AND link != ''
+               WHERE link != '' AND COALESCE(fulltext_tries, 0) < 5
                  AND (content IS NULL OR length(content) < ?)
                ORDER BY ts DESC LIMIT ?""",
             (min_chars, limit),
@@ -161,12 +163,33 @@ def articles_needing_fulltext(con, min_chars, limit=200):
     ]
 
 
-def set_fulltext(con, article_id, content):
-    con.execute(
-        "UPDATE articles SET content = COALESCE(?, content), fulltext_at = ? WHERE id = ?",
-        (content, now(), article_id),
+def record_fulltext(con, article_id, content, ok):
+    if ok:
+        con.execute(
+            """UPDATE articles SET content = COALESCE(?, content),
+               fulltext_at = ?, fulltext_tries = 3 WHERE id = ?""",
+            (content, now(), article_id),
+        )
+    else:
+        con.execute(
+            """UPDATE articles SET
+                 fulltext_tries = COALESCE(fulltext_tries, 0) + 1,
+                 fulltext_at = CASE WHEN COALESCE(fulltext_tries, 0) + 1 >= 5
+                                    THEN ? ELSE fulltext_at END
+               WHERE id = ?""",
+            (now(), article_id),
+        )
+    con.commit()
+
+
+def reset_fulltext_retries(con, min_chars):
+    cur = con.execute(
+        "UPDATE articles SET fulltext_at = NULL, fulltext_tries = 0 "
+        "WHERE length(COALESCE(content, '')) < ?",
+        (min_chars,),
     )
     con.commit()
+    return cur.rowcount
 
 
 def articles_without_vector(con, limit=1000):

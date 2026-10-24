@@ -5,7 +5,10 @@ import html
 import re
 import socket
 import time
+import urllib.error
+from collections import defaultdict
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import feedparser
 
@@ -134,20 +137,44 @@ def enrich_fulltext(con, log=print):
     if not settings.get("fulltext", True):
         return 0
     min_chars = int(settings.get("fulltext_min_chars", 900))
-    rows = store.articles_needing_fulltext(con, min_chars)
+    rows = store.articles_needing_fulltext(con, min_chars, limit=400)
     if not rows:
         log("no hay articulos que necesiten texto completo")
         return 0
-    log(f"buscando texto completo en {len(rows)} articulos")
-    fetched = 0
+
+    by_host = defaultdict(list)
     for row in rows:
-        body = None
-        try:
-            body = fulltext.fetch_article(row["link"])
-        except Exception:  # noqa: BLE001 - un fallo puntual no aborta
+        host = urlsplit(row["link"]).netloc.lower()
+        by_host[host].append(row)
+
+    log(f"buscando texto completo: {len(rows)} pendientes en {len(by_host)} hosts")
+    fetched = 0
+    attempted = 0
+    per_host = 25
+    for host, items in by_host.items():
+        delay = 2.5 if "phys.org" in host else 0.8
+        for row in items[:per_host]:
+            attempted += 1
             body = None
-        if body:
-            fetched += 1
-        store.set_fulltext(con, row["id"], body)
-    log(f"texto completo obtenido en {fetched}/{len(rows)} articulos")
+            try:
+                body = fulltext.fetch_article(row["link"])
+            except urllib.error.HTTPError as exc:
+                if exc.code == 429:
+                    log(f"  {host}: 429 rate-limit, se pospone al proximo ciclo")
+                    break
+            except Exception:  # noqa: BLE001 - un fallo puntual no aborta
+                body = None
+            existing = row.get("content") or ""
+            if body and len(body) > len(existing):
+                store.record_fulltext(con, row["id"], body, True)
+                fetched += 1
+            elif body:
+                # la pagina no aporta mas que el feed: damos por hecho el articulo
+                store.record_fulltext(con, row["id"], None, True)
+            else:
+                # fallo transitorio: se reintenta en ciclos posteriores (max 5)
+                store.record_fulltext(con, row["id"], None, False)
+            time.sleep(delay)
+    store.commit(con)
+    log(f"texto completo obtenido en {fetched}/{attempted} intentos")
     return fetched
