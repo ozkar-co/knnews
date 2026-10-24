@@ -1,58 +1,111 @@
-# knnews · perfil de interes y ajustes de clasificacion.
-# Edita este archivo a mano. Cada tema se convierte en un feed en
-# http://<host>:3010/feeds/tema-<slug>.xml ademas del combinado /feeds/todo.xml.
+# knnews · perfil de interes, importancia y ajustes.
+# Los feeds publicados son los mismos que ya usas:
+#   todo + 13 temas (seguridad, linux, privacidad, ia, programacion,
+#   cultura-digital, ciencia, colombia, internacional, economia, ensayos,
+#   videojuegos, autosostenibilidad). No se renombra ninguno.
 
-# --- ajustes del servicio ---
 port: 3010
-cycle_hours: 2        # cada cuantas horas corre el ciclo en modo serve
+cycle_hours: 2
 
-# --- clasificacion ---
-# score final = weight_knn * knn + weight_anchor * similitud_al_tema
-#   knn     : fraccion ponderada de vecinos etiquetados como relevantes (0..1)
-#   anchor  : similitud coseno al tema mas cercano (aprox -1..1)
-threshold: 0.35       # score minimo para entrar en los feeds
-topic_floor: 0.12     # similitud minima para asignar un tema (si no: 'otros')
-knn_k: 15             # vecinos a considerar
+# --- relevancia (tu gusto) ---
+threshold: 0.58          # score minimo de relevancia para entrar
+topic_floor: 0.10        # similitud minima para asignar tema (si no: otros)
+knn_k: 15
 weight_knn: 0.65
-weight_anchor: 0.35
-weight_dislike: 0.5   # cuanto resta la similitud con los 'dislikes'
-feeds_limit: 80       # maximo de articulos por feed
+weight_anchor: 0.25
+weight_dislike: 0.35
 
-# --- descartados: temas que NO te interesan (bajan el score) ---
-# Todo lo que se parezca a estas descripciones resta weight_dislike * similitud,
-# asi que no hace falta etiquetarlo a mano. Edita la lista a tu gusto.
+# --- importancia (contexto, independiente del gusto) ---
+# importance = weight_salience*saliencia + weight_source_importance*prior_fuente
+#              + weight_recency*recencia
+importance_threshold: 0.50
+weight_salience: 0.55
+weight_source_importance: 0.25
+weight_recency: 0.20
+salience_similarity: 0.72   # coseno para considerar "el mismo hecho"
+cluster_window_hours: 72    # ventana para agrupar eventos
+max_cluster_sources: 5      # a partir de aqui la saliencia es maxima
+
+# --- dominios (exclusion / penalizacion) ---
+# Se calculan con centroides derivados del bootstrap (flags del LLM).
+hard_exclude_domains: [celebrity, sports, crime]
+domain_threshold: 0.52
+soft_domains: [politics]
+
+feeds_limit: 25
+max_per_source: 4
+
+# fuentes locales que deben tener presencia garantizada en el feed de Colombia
+local_sources: [eldiario-local, lapatria, eje21]
+local_per_source: 2
+
+# --- texto completo ---
+fulltext: true
+fulltext_min_chars: 900
+fulltext_timeout: 20
+
+# --- descartados suaves (restan score; los duros van por dominio) ---
 dislikes:
-  - >
-    automoviles, coches, carros, motos, SUV, comparativas de vehiculos,
-    novedades del motor, coches electricos
-  - >
-    deportes, futbol, resultados de partidos, fichajes, ligas, olimpiadas
   - >
     farandula, celebridades, vida de famosos, reality shows, chismes de artistas
   - >
-    recetas de cocina, gastronomia, restaurantes, moda, belleza, horoscopos
+    deportes, futbol, resultados de partidos, fichajes, ligas, olimpiadas
   - >
-    criptomonedas, trading, finanzas personales, consejos para ahorrar
+    crimen comun, homicidios, hurtos, atracos, capturas, operativos policiales,
+    mafia, narcotrafico, bandas criminales
   - >
-    ofertas, descuentos, rebajas, cupones, chollos, "en oferta", recomendaciones
-    y guias de compra, mejores productos para comprar, analisis de gadgets
+    politica partidista, campanas electorales, disputas entre partidos,
+    declaraciones de politicos
   - >
-    seguridad ciudadana, crimen comun, delincuencia, policia, capturas,
-    homicidios, hurtos, atracos, accidentes de transito, mafia, narcotrafico,
-    bandas criminales, conflicto armado, operativos militares
+    ofertas, descuentos, rebajas, cupones, chollos, "en oferta", guias de compra,
+    mejores productos para comprar, analisis de gadgets
 
-# --- texto completo ---
-# newsboat muestra el articulo sin salir de el si el feed trae <content:encoded>.
-# Para las fuentes que solo publican un encabezado (ver 'python -m knnews check-feeds'),
-# knnews descarga la pagina del articulo y extrae los parrafos del cuerpo.
-fulltext: true
-fulltext_min_chars: 900   # si el contenido del feed es menor, se intenta la pagina
-fulltext_timeout: 20
+# --- mapeo fuente -> tema (fuentes especializadas; el resto usa anclas) ---
+source_topic:
+  thehackernews: seguridad
+  bleepingcomputer: seguridad
+  unaaldia: seguridad
+  seguinfo: seguridad
+  securelist: seguridad
+  nosolohacking: seguridad
+  desdelinux: linux
+  nosgustalinux: linux
+  muylinux: linux
+  linuxadictos: linux
+  lwn: linux
+  phoronix: linux
+  quantamagazine: ciencia
+  physorg: ciencia
+  culturacientifica: ciencia
+  eldiario/ciencia: ciencia
+  lasillavacia: colombia
+  semana/nacion: colombia
+  elespectador/politica: colombia
+  cuestionpublica: colombia
+  latarde: colombia
+  eldiario-local: colombia
+  lapatria: colombia
+  eje21: colombia
+  eltiempo/colombia: colombia
+  bbc/europa: internacional
+  politico/europa: internacional
+  france24/europa: internacional
+  eldiario/internacional: internacional
+  eldiario/economia: economia
+  vidaextra: videojuegos
+  theverge/ai: ia
+  techcrunch/ai: ia
+  technologyreview/ia: ia
+  enriquedans: cultura-digital
+  microsiervos: cultura-digital
+  hipertextual: cultura-digital
+  lowtechmagazine: autosostenibilidad
+  pluralistic: ensayos
+  danluu: ensayos
+  jvns: programacion
+  filfre: videojuegos
 
-# --- temas de interes ---
-# name         : titulo legible (nombre del feed)
-# slug         : nombre corto usado en la URL
-# description  : texto que se vectoriza; describe el tema con tus palabras.
+# --- temas (los 13 feeds actuales) ---
 topics:
   - name: "Seguridad informatica"
     slug: seguridad
@@ -67,12 +120,14 @@ topics:
     slug: linux
     description: >
       GNU/Linux, distribuciones, kernel, software libre y open source,
-      herramientas de linea de comandos, self-hosting, escritorio linux
+      herramientas de linea de comandos, self-hosting, escritorio linux,
+      hardware abierto y proyectos DIY
   - name: "Privacidad"
     slug: privacidad
     description: >
       privacidad digital, cifrado, vigilancia masiva, derechos digitales,
-      anonimato, control de datos, grandes tecnologicas, censura
+      anonimato, control de datos, grandes tecnologicas, censura, libertad de
+      expresion, periodismo y libertad
   - name: "IA / ML"
     slug: ia
     description: >
@@ -86,54 +141,52 @@ topics:
     slug: programacion
     description: >
       programacion, desarrollo de software, arquitectura, ingenieria de
-      software, lenguajes, rendimiento, bases de datos, ensayos tecnicos
+      software, lenguajes, rendimiento, bases de datos, algoritmos, ensayos
+      tecnicos y oficio del programador
   - name: "Cultura digital"
     slug: cultura-digital
     description: >
       internet, cultura digital, redes sociales, tecnologia y sociedad,
-      historia de la informatica, plataformas, economia de la atencion
+      historia de la informatica, plataformas, economia de la atencion,
+      cultura geek, cine y series, videojuegos como fenomeno cultural
   - name: "Ciencia"
     slug: ciencia
     description: >
       divulgacion cientifica, fisica, biologia, astronomia, investigacion,
-      descubrimientos, medio ambiente, clima
+      descubrimientos, medio ambiente, clima, matematicas y logica
   - name: "Colombia"
     slug: colombia
     description: >
-      noticias de Colombia, actualidad colombiana, politica de Colombia,
-      gobierno de Colombia, presidente de Colombia, congreso colombiano,
-      Bogota, Medellin, Cali, Barranquilla, conflicto armado colombiano,
-      ELN, disidencias de las FARC, fiscalia de Colombia, alcaldias de Colombia
+      noticias de Colombia, actualidad colombiana, Pereira, Risaralda,
+      Dosquebradas, Santa Rosa de Cabal, Eje Cafetero, Manizales, Armenia,
+      Quindio, Caldas, gobierno de Colombia, congreso colombiano, Bogota,
+      Medellin, Cali, Barranquilla, conflicto armado colombiano, ELN,
+      disidencias de las FARC, fiscalia de Colombia, alcaldias de Colombia
   - name: "Internacional"
     slug: internacional
     description: >
       geopolitica, relaciones internacionales, conflictos, politica mundial,
-      America Latina, medio oriente
+      America Latina, Europa, Union Europea, protestas y manifestaciones,
+      elecciones, medio oriente, hechos sistemicos del mundo
   - name: "Economia"
     slug: economia
     description: >
       economia, mercados, macroeconomia, crisis financiera, desigualdad,
-      trabajo, vivienda
+      trabajo, vivienda, tecnologia y economia
   - name: "Ensayos / pensamiento"
     slug: ensayos
     description: >
-      ensayos largos, pensamiento, filosofia, blogs personales, opinion
-      profunda sobre tecnologia, ideas y sociedad
+      ensayos largos, pensamiento, filosofia, logica, blogs personales, opinion
+      profunda sobre tecnologia, ideas, sociedad, libertad y critica de la
+      tecnologia (neoludismo)
   - name: "Videojuegos"
     slug: videojuegos
     description: >
       videojuegos, industria del videojuego, analisis de juegos, consolas,
-      PC gaming, retro gaming
+      PC gaming, retro gaming, historia de los videojuegos
   - name: "Autosostenibilidad / libertad"
     slug: autosostenibilidad
     description: >
       autosostenibilidad, vida offgrid, permacultura, libertad individual,
-      autogobernanza, soberania, tecnologia apropiada, energias renovables,
-      comunidad y descentralizacion
-  - name: "Europa"
-    slug: europa
-    description: >
-      noticias de Europa, Union Europea, politica europea, protestas y
-      manifestaciones, elecciones en Europa, Francia, Alemania, Italia, Reino
-      Unido, Espana, Bruselas, decisiones de la UE, crisis social y movimientos
-      ciudadanos
+      autogobierno, soberania, tecnologia apropiada, energias renovables,
+      comunidad y descentralizacion, critica del progreso y neoludismo

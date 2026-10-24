@@ -58,3 +58,10 @@ https://www.technologyreview.com/topic/artificial-intelligence/feed/ "~technolog
 https://feeds.bbci.co.uk/news/world/europe/rss.xml "~bbc/europa"
 https://www.politico.eu/feed/ "~politico/europa"
 https://www.france24.com/en/europe/rss "~france24/europa"
+
+# --- PEREIRA / EJE CAFETERO ---
+https://www.latarde.com/feed/ "~latarde"
+https://www.eldiario.com.co/feed/ "~eldiario-local"
+https://www.lapatria.com/rss.xml "~lapatria"
+https://eje21.com.co/feed/ "~eje21"
+https://www.eltiempo.com/rss/colombia.xml "~eltiempo/colombia"
