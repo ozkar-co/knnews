@@ -1,42 +1,58 @@
 # knnews
 
 Filtro personal de noticias. Lee tus fuentes RSS, vectoriza cada articulo y
-publica **feeds filtrados** segun tu perfil de interes, para no perder tiempo
-leyendo titulares que no valen la pena.
+publica feeds filtrados combinando **dos ejes**:
 
-En vez de una lista de palabras clave, knnews usa **embeddings multilingues**
-(misma representacion semantica para todas las noticias) + un **clasificador KNN**
-sobre ejemplos de relevancia ("me interesa / no me interesa"), apoyado en un
-pequeno conjunto de **anclas de tema** y una lista de **descartados** descritos en
-lenguaje natural.
+- **relevancia** (tu gusto): embeddings + KNN sobre ejemplos etiquetados + anclas de tema.
+- **importancia** (contexto): saliencia entre fuentes, autoridad y recencia.
+
+La idea es no perder lo importante aunque no sea tu tema, y no inundarte con lo
+que no te interesa. El perfil se construye **una sola vez** con un LLM offline
+(DeepSeek) y queda congelado: **en runtime no hay LLM ni coste por articulo**.
 
 ## Como funciona
 
 ```
-urls ──feedparser──> articulos ──embed (384d)──> score ──> RSS por tema ──HTTP──> newsboat
-                                                    ▲
-                          perfil = anclas de tema + ejemplos etiquetados (KNN)
+urls ──ingesta──> articulos ──embed 384d──> clustering por evento (saliencia)
+                                              │
+                       ┌──────────────────────┴─────────────────────┐
+                       ▼                                            ▼
+              RELEVANCIA (KNN+anclas)                      IMPORTANCIA (saliencia)
+                       └──────────────────────┬─────────────────────┘
+                                              ▼
+                         dominios (exclusion) + dedup + ranking
+                                              ▼
+                                   todo + 13 feeds por tema
 ```
 
 1. **Ingesta**: lee `urls` (formato newsboat) y descarga cada feed.
-2. **Vectorizacion**: envia titulo + resumen a un servicio de embeddings
-   (`embed.ozkr.net`, modelo `paraphrase-multilingual-MiniLM-L12-v2`, 384 dims).
-3. **Clasificacion**: `score = weight_knn * KNN + weight_anchor * similitud_al_tema - weight_dislike * similitud_a_descartados`.
-   - **KNN**: fraccion ponderada por similitud de vecinos marcados como relevantes.
-   - **Ancla**: similitud coseno al tema mas cercano (los temas van en `interests.yaml`).
-   - **Descartados**: si el articulo se parece a la lista `dislikes`, se le resta.
-4. **Publicacion**: escribe un RSS por tema (`tema-<slug>.xml`) y uno combinado
-   (`todo.xml`) con lo que supera el umbral.
-5. **Servicio**: un ciclo cada `cycle_hours` horas y un servidor HTTP que sirve
-   los feeds para tu cliente (newsboat), tipicamente tras un tunel Cloudflare.
+2. **Vectorizacion**: `embed.ozkr.net` (MiniLM multilingue, 384d).
+3. **Clustering**: agrupa el mismo hecho cubierto por varias fuentes (ventana de
+   72 h) y calcula la **saliencia** (nº de fuentes distintas).
+4. **Relevancia**: `KNN` de vecinos etiquetados + ancla de tema - dislikes.
+5. **Importancia**: `0.55*saliencia + 0.25*prior_fuente + 0.20*recencia`.
+6. **Dominios**: centroides de `celebrity`, `sports`, `crime` (exclusion dura) y
+   `politics` (penalizacion suave), derivados del bootstrap.
+7. **Publicacion**: `todo` + 13 temas, con dedup por evento y por titulo, cupo
+   por fuente y ranking por `0.6*relevancia + 0.4*importancia`.
+
+## Feeds (los mismos que ya usas)
+
+`todo` + `tema-seguridad`, `tema-linux`, `tema-privacidad`, `tema-ia`,
+`tema-programacion`, `tema-cultura-digital`, `tema-ciencia`, `tema-colombia`,
+`tema-internacional`, `tema-economia`, `tema-ensayos`, `tema-videojuegos`,
+`tema-autosostenibilidad`.
+
+Se publican **siempre los 14** (aunque un tema quede vacio) para no romper las
+suscripciones de newsboat. No hay que reconfigurar nada.
 
 ## Requisitos
 
 - Python 3.10+ (probado con 3.13).
 - Acceso al servicio de embeddings (`KNNEWS_EMBED_URL`, por defecto
-  `https://embed.ozkr.net/api/embed`). Cualquier endpoint compatible que acepte
-  `{"texts": [...]}` y devuelva `{"embeddings": [[...]]}` sirve.
-- Opcional: systemd o tmux para mantenerlo corriendo en un servidor.
+  `https://embed.ozkr.net/api/embed`).
+- Opcional: systemd o tmux para mantener el servicio en un servidor.
+- Solo para re-entrenar: `DEEPSEEK_API_KEY` en `.env` (no se versiona).
 
 ## Uso
 
@@ -44,125 +60,108 @@ urls ──feedparser──> articulos ──embed (384d)──> score ──> R
 ./run.sh     # arranca el servicio en :3010 (el ciclo corre cada 2 horas)
 ```
 
-`run.sh` crea un virtualenv en `.venv/`, instala las dependencias y arranca el
-servicio. Es lo unico que hay que ejecutar. Los comandos de mantenimiento viven
-en el modulo interno (`python -m knnews`) y no hacen falta en el uso normal.
+`run.sh` crea el virtualenv, instala dependencias y arranca. Es lo unico que hay
+que ejecutar en el dia a dia.
+
+Comandos internos (mantenimiento, no hacen falta normalmente):
+
+```bash
+python -m knnews cycle        # un ciclo completo ahora
+python -m knnews classify     # recalcular clasificacion y republicar
+python -m knnews bootstrap    # etiquetado offline con LLM (una sola vez)
+python -m knnews validate     # comparar bootstrap con etiquetas previas
+python -m knnews check-feeds  # auditar si cada fuente trae texto completo
+python -m knnews stats
+```
 
 ## Configuracion: `interests.yaml`
 
-| campo          | significado                                                        |
-| -------------- | ------------------------------------------------------------------ |
-| `port`         | puerto HTTP (por defecto 3010).                                    |
-| `cycle_hours`  | cada cuantas horas corre el ciclo en modo `serve`.                 |
-| `threshold`    | score minimo para entrar en los feeds.                             |
-| `topic_floor`  | similitud minima para asignar un tema (si no, cae en `otros`).     |
-| `knn_k`        | numero de vecinos etiquetados a considerar.                        |
-| `weight_knn` / `weight_anchor` | peso del KNN y de las anclas en el score final.     |
-| `weight_dislike` | cuanto resta la similitud con los `dislikes`.                     |
-| `dislikes`     | temas que NO te interesan (autos, deportes, farandula…): restan score. |
-| `feeds_limit`  | maximo de articulos por feed.                                      |
-| `base_url`     | URL publica para los self-links (pon la de tu tunel).             |
-| `fulltext`     | intenta descargar el articulo completo de fuentes que solo dan teaser. |
-| `fulltext_min_chars` | umbral de contenido por debajo del cual se intenta la pagina. |
-| `topics`       | lista de temas: `name`, `slug` y `description` (texto que se vectoriza). |
-
-Cada tema genera un feed `tema-<slug>.xml`. Anade, quita o reescribe temas y
-corre `python -m knnews classify` para regenerar.
+| campo | significado |
+| --- | --- |
+| `threshold` | relevancia minima para entrar en los feeds. |
+| `importance_threshold` | importancia minima (contexto) para entrar. |
+| `weight_knn` / `weight_anchor` / `weight_dislike` | pesos del eje de gusto. |
+| `weight_salience` / `weight_source_importance` / `weight_recency` | pesos de importancia. |
+| `salience_similarity` | coseno para agrupar el mismo hecho (0.72). |
+| `cluster_window_hours` | ventana de clustering (72 h). |
+| `hard_exclude_domains` | dominios que no se publican nunca (celebrity, sports, crime). |
+| `soft_domains` | dominios penalizados (politics). |
+| `local_sources` / `local_per_source` | fuentes locales con presencia garantizada en `tema-colombia`. |
+| `source_topic` | mapeo fuente -> tema para medios especializados. |
+| `topics` | los 13 temas con su descripcion (texto que se vectoriza). |
+| `dislikes` | temas que restan score (farandula, deportes, crimen, politica, ofertas). |
 
 ## Fuentes: `urls`
 
-Formato newsboat, una por linea, con etiqueta opcional entre comillas:
+Formato newsboat, una por linea, con etiqueta opcional:
 
 ```
 https://ejemplo.com/feed "~etiqueta"
 # las lineas que empiezan por # se ignoran
 ```
 
-## Salida y newsboat
-
-Con el servicio en marcha:
-
-- `GET /` — indice HTML con todos los feeds.
-- `GET /health` — `{"status": "ok"}`.
-- `GET /feeds/todo.xml` — combinado.
-- `GET /feeds/tema-seguridad.xml` — por tema.
-
-En newsboat suscribe las URLs del tunel, p.ej.:
-
-```
-https://noticias.ejemplo.net/feeds/tema-seguridad.xml
-https://noticias.ejemplo.net/feeds/tema-linux.xml
-```
+Incluye fuentes locales de Pereira/Eje Cafetero (`latarde`, `eldiario-local`,
+`lapatria`, `eje21`) y nacionales (`eltiempo/colombia`). El feed `tema-colombia`
+garantiza presencia de las fuentes locales configuradas en `local_sources`.
 
 ## Contenido completo
 
-Los feeds se emiten con `<content:encoded>`, que es lo que newsboat muestra al
-abrir un articulo (sin salir del lector). La mayoria de las fuentes ya traen el
-texto entero en su `<description>`; unas pocas (Ars Technica, LWN, Schneier,
-Quanta…) dan un resumen, y otras (The Hacker News, BleepingComputer, phys.org,
-Phoronix) solo un encabezado.
-
-Para esas ultimas, con `fulltext: true` knnews descarga la pagina del articulo y
-extrae los parrafos del cuerpo, de modo que tambien se lean completas. Con
-`python -m knnews check-feeds` ves el veredicto de cada fuente y si merece la
-pena mantenerla.
-
-## Despliegue en un servidor
-
-El servicio escucha en `0.0.0.0:3010`, listo para exponer con un tunel
-Cloudflare (apunta el tunel a `http://localhost:3010`). Ejemplo de unidad systemd:
-
-```ini
-[Unit]
-Description=knnews filtro de noticias
-After=network-online.target
-
-[Service]
-WorkingDirectory=/opt/knnews
-ExecStart=/opt/knnews/run.sh
-Restart=on-failure
-Environment=KNNEWS_PORT=3010
-
-[Install]
-WantedBy=multi-user.target
-```
+Los feeds emiten `<content:encoded>` (lo que newsboat muestra sin salir del
+lector). Para fuentes que solo publican un teaser, `fulltext` descarga la pagina
+del articulo y extrae los parrafos del cuerpo. `fulltext` bloquea IPs
+privadas/loopback (proteccion SSRF).
 
 ## Perfil y entrenamiento
 
-El perfil tiene dos partes y **no hay comandos interactivos**:
+El perfil se construye **una sola vez**:
 
-- **Etiquetas** (`label` = 1 me interesa / 0 no): se guardan en
-  `data/knnews.sqlite3` y se **curan externamente** (el operador del proyecto las
-  ajusta); el servicio solo las usa como ejemplos del KNN.
-- **Anclas y descartados** (`interests.yaml`): describen tus temas y lo que no te
-  interesa (`dislikes`, que restan score). Se pueden editar a mano.
+```bash
+python -m knnews bootstrap            # etiqueta el corpus con DeepSeek
+python -m knnews validate             # concordancia con etiquetas previas
+```
 
-El servicio clasifica en cada ciclo sin intervencion. Para revisar o forzar una
-reclasificacion tras cambiar `interests.yaml`: `python -m knnews classify`.
+El bootstrap guarda por articulo `llm_relevance`, `llm_importance`, `llm_topic` y
+`llm_flags`, deriva los centroides de dominio y los priors por fuente, y deja
+`label` para el KNN. Despues el runtime solo usa esos datos: **cero LLM en
+produccion**.
 
-La base `data/knnews.sqlite3` **se versiona en git** para que el perfil ya
-entrenado viaje al servidor. Se ignoran los sidecar WAL y lo que se regenera
-(`data/feeds/`, `data/manifest.json`, `data/profile_vectors.json`).
+## Operacion y datos
+
+- **Lock de ciclo**: evita solapamientos si un ciclo tarda mas de 2 h.
+- **Retencion**: a los 60 dias se borra el HTML completo (se conservan resumen,
+  vector y etiquetas) y se hace `VACUUM` semanal para controlar el tamaño.
+- **DB versionada**: `data/knnews.sqlite3` va en git (lleva el perfil entrenado al
+  servidor). Se ignoran los sidecar WAL, `data/feeds/`, `data/manifest.json` y el
+  cache de vectores.
+- **Despliegue**: en el servidor, como la DB viva cambia, descarta la local y trae
+  la versionada:
+
+```bash
+git checkout -- data/knnews.sqlite3 && git pull
+# reinicia el servicio
+```
 
 ## Estructura
 
 ```
-run.sh              punto de entrada (venv + deps + modulo)
+run.sh              punto de entrada (venv + deps + servicio)
 urls                fuentes RSS (formato newsboat)
-interests.yaml      perfil de interes y ajustes
+interests.yaml      perfil, importancia y ajustes
 requirements.txt    feedparser, numpy, PyYAML
 knnews/
   config.py         rutas, constantes y carga de interests.yaml
-  store.py          SQLite: articulos, vectores, etiquetas
+  store.py          SQLite: articulos, vectores, etiquetas, dominios
   embed.py          cliente del servicio de embeddings
   ingest.py         lectura de feeds, vectorizacion y texto completo
-  fulltext.py       extraccion del cuerpo desde la pagina del articulo
-  classify.py       anclas de tema + descartados + KNN
-  feeds.py          generacion de los RSS de salida
+  fulltext.py       extraccion del cuerpo + proteccion SSRF
+  cluster.py        clustering por evento y saliencia
+  classify.py       relevancia + importancia + dominios
+  feeds.py          generacion de los RSS (dedup, cupos, ranking)
+  bootstrap.py      etiquetado offline con DeepSeek (una sola vez)
   audit.py          auditoria de fuentes (check-feeds)
-  service.py        ciclo completo y planificador
+  service.py        ciclo completo, lock y planificador
   server.py         servidor HTTP
   cli.py            linea de comandos
-data/knnews.sqlite3 articulos, vectores y etiquetas (VERSIONADO)
+data/knnews.sqlite3 perfil entrenado y articulos (VERSIONADO)
 data/               feeds, manifest y cache (ignorados)
 ```
