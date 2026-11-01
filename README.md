@@ -117,7 +117,9 @@ Se eliminan los CTAs ("read more", "leer mas", newsletters) y **no se publica
 ningun articulo con menos de `min_content_chars` (600) caracteres de texto**: si no
 se pudo obtener el articulo completo, se descarta en vez de mostrar un teaser.
 El contenido se publica **solo texto**: se quitan imagenes/video y los enlaces se
-convierten en su texto (sin URLs).
+convierten en su texto (sin URLs). Ademas se reconstruye solo con los bloques del
+articulo (parrafos, codigo, listas); se descartan relacionados, newsletters,
+link-lists y boilerplate.
 `fulltext` bloquea IPs privadas/loopback (proteccion SSRF).
 
 ## Perfil y entrenamiento

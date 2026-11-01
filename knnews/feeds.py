@@ -100,8 +100,17 @@ def _decorate(art, min_chars=0):
     # LWN marca con [$] el contenido solo para suscriptores: no es completo.
     if art.get("source") == "lwn" and (art.get("title") or "").strip().startswith("[$]"):
         return None
-    text = art.get("content") or art.get("summary") or ""
-    if fulltext.text_length(text) < min_chars:
+    text_len = 0
+    content = art.get("content") or ""
+    if content:
+        if not art.get("_cleaned"):
+            content = fulltext.clean_content(content)
+            art["content"] = content
+            art["_cleaned"] = True
+        text_len = fulltext.text_length(content)
+    if text_len == 0:
+        text_len = fulltext.text_length(art.get("summary") or "")
+    if text_len < min_chars:
         return None
     art["_combined"] = 0.6 * (art.get("score") or 0.0) + 0.4 * (art.get("importance") or 0.0)
     return art

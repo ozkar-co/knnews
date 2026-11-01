@@ -5,6 +5,7 @@ con la libreria estandar: descarga el HTML y toma los parrafos del cuerpo del
 articulo (`<article>`/`<main>` si existen, si no, todos los parrafos largos).
 """
 
+import html as html_lib
 import ipaddress
 import re
 import socket
@@ -25,8 +26,13 @@ BOILERPLATE_RE = re.compile(
     r"reprinted|image credit|credit:|story source|source:|"
     r"read more|read the full|read the entire|read the complete|full text|"
     r"continue reading|full story|leer m[aá]s|sigue leyendo|contin[uú]a leyendo|"
-    r"posts from this topic|daily email digest|sign up|subscribe|newsletter|"
-    r"follow us|share this|advertisement|related stories|"
+    r"posts from this (topic|author)|will be added to your daily email digest|"
+    r"daily email digest|homepage feed|sign up|subscribe|newsletter|"
+    r"follow us|share this|advertisement|related stories|most popular|"
+    r"more from|read next|you might also like|recommended|trending|"
+    r"about the author|join the conversation|tags:|"
+    r"a free daily digest|daily digest of the news|news that matters most|"
+    r"sign up for our|download our app|follow us on|"
     r"the post .* appeared first)",
     re.IGNORECASE,
 )
@@ -35,7 +41,8 @@ CTA_RE = re.compile(
     r"(read (the )?(full|more|entire|rest|complete)|continue reading|full story|"
     r"leer (m[aá]s|la nota|el art[ií]culo|completo)|sigue leyendo|"
     r"contin[uú]a leyendo|ver (la )?nota completa|posts from this topic|"
-    r"daily email digest|newsletter|sign up for|subscribe to)",
+    r"posts from this author|daily email digest|homepage feed|newsletter|"
+    r"sign up for|subscribe to)",
     re.IGNORECASE,
 )
 
@@ -100,6 +107,107 @@ def sanitize_html(html):
     html = html.replace("&nbsp;", " ")
     html = re.sub(r">\s+<", "><", html)
     return html.strip()
+
+
+RELATED_RE = re.compile(
+    r"^(related|more from|read next|you might also like|recommended|share|follow|"
+    r"subscribe|sign up|advertisement|tags|about the author|comments|"
+    r"join the conversation|posts from this (topic|author)|daily email digest|"
+    r"homepage feed|most popular|trending|popular|newsletter|"
+    r"a free daily digest|daily digest of the news|news that matters most)\b",
+    re.IGNORECASE,
+)
+BLOCK_TAGS = {"p", "pre", "blockquote", "li", "h2", "h3", "h4"}
+
+
+class _BlockExtractor(HTMLParser):
+    """Extrae bloques de contenido (parrafos, codigo, listas) de un HTML."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self._skip = 0
+        self._in_link = 0
+        self._block = None
+        self._depth = 0
+        self._text = []
+        self._link_len = 0
+        self.blocks = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag in SKIP_TAGS:
+            self._skip += 1
+            return
+        if tag == "a":
+            self._in_link += 1
+        if tag in BLOCK_TAGS:
+            if self._block is None:
+                self._block = tag
+                self._text = []
+                self._link_len = 0
+                self._depth = 1
+            else:
+                self._depth += 1
+
+    def handle_endtag(self, tag):
+        if tag in SKIP_TAGS:
+            if self._skip:
+                self._skip -= 1
+            return
+        if tag == "a" and self._in_link:
+            self._in_link -= 1
+        if tag in BLOCK_TAGS and self._block is not None:
+            self._depth -= 1
+            if self._depth == 0:
+                self.blocks.append(
+                    (self._block, "".join(self._text), self._link_len)
+                )
+                self._block = None
+
+    def handle_data(self, data):
+        if self._skip or self._block is None:
+            return
+        self._text.append(data)
+        if self._in_link:
+            self._link_len += len(data)
+
+
+def clean_content(html):
+    """Conserva solo el texto de los bloques del articulo.
+
+    Elimina imagenes, enlaces, relacionados, newsletters y cualquier bloque
+    que sea mayoritariamente un enlace o boilerplate. Conserva codigo (<pre>).
+    """
+    if not html:
+        return ""
+    parser = _BlockExtractor()
+    try:
+        parser.feed(html)
+    except Exception:  # noqa: BLE001 - HTML roto no debe romper el feed
+        pass
+
+    kept = []
+    seen = set()
+    for tag, raw, link_len in parser.blocks:
+        if tag == "pre":
+            text = raw.strip("\n")
+            if len(text.strip()) < 20 or text in seen:
+                continue
+            seen.add(text)
+            kept.append(f"<pre>{html_lib.escape(text)}</pre>")
+            continue
+        text = " ".join(raw.split())
+        if len(text) < 25 or text in seen:
+            continue
+        if BOILERPLATE_RE.match(text) or RELATED_RE.match(text):
+            continue
+        if link_len and link_len / max(1, len(text)) > 0.5:
+            continue
+        seen.add(text)
+        kept.append(f"<p>{html_lib.escape(text)}</p>")
+
+    if not parser.blocks:
+        return sanitize_html(html)
+    return "\n".join(kept)
 
 
 def _is_public_host(host):
