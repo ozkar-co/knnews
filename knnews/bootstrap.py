@@ -183,6 +183,7 @@ def derive(con, log=print):
            FROM articles WHERE llm_importance IS NOT NULL GROUP BY source"""
     ):
         store.upsert_source_stat(con, row["source"], row["n"], row["r"], row["i"])
+    store.sync_training(con)
     store.set_meta(con, "bootstrap_at", store.now())
     store.set_meta(con, "bootstrap_model", MODEL)
     store.set_meta(con, "bootstrap_articles", len(parsed))

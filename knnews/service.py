@@ -34,9 +34,13 @@ def run_cycle(log=print):
                 con, settings, only_unclassified=True, log=log
             )
             classify.update_importance(con, settings, log=log)
-            pruned = store.prune_content(con, days=60)
+            pruned = store.prune_articles(
+                con,
+                settings.get("retention_days", 7),
+                settings.get("backlog_sources") or [],
+            )
             if pruned:
-                log(f"contenido antiguo depurado: {pruned} articulos")
+                log(f"articulos viejos eliminados: {pruned}")
             store.maybe_vacuum(con, days=7)
             manifest = feeds.publish(con, settings, log=log)
         finally:

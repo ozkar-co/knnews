@@ -62,6 +62,11 @@ CREATE TABLE IF NOT EXISTS meta (
     key   TEXT PRIMARY KEY,
     value TEXT
 );
+CREATE TABLE IF NOT EXISTS training (
+    id     INTEGER PRIMARY KEY,
+    vector BLOB,
+    label  INTEGER
+);
 """
 
 
@@ -261,10 +266,12 @@ def commit(con):
 
 
 def labeled_examples(con):
-    """Devuelve (labels(+1/-1), matriz de vectores) de los articulos etiquetados."""
-    rows = con.execute(
-        "SELECT vector, label FROM articles WHERE label IS NOT NULL AND vector IS NOT NULL"
-    ).fetchall()
+    """Etiquetas del perfil congelado (tabla training), con fallback a articles."""
+    rows = con.execute("SELECT vector, label FROM training").fetchall()
+    if not rows:
+        rows = con.execute(
+            "SELECT vector, label FROM articles WHERE label IS NOT NULL AND vector IS NOT NULL"
+        ).fetchall()
     labels, vecs = [], []
     for row in rows:
         labels.append(1 if row["label"] == 1 else -1)
@@ -408,6 +415,34 @@ def set_meta(con, key, value):
 def get_meta(con, key, default=None):
     row = con.execute("SELECT value FROM meta WHERE key=?", (key,)).fetchone()
     return row["value"] if row else default
+
+
+def sync_training(con):
+    """Congela el perfil etiquetado en una tabla fija (no crece con el tiempo)."""
+    con.execute("DELETE FROM training")
+    con.execute(
+        "INSERT INTO training(vector, label) "
+        "SELECT vector, label FROM articles "
+        "WHERE label IS NOT NULL AND vector IS NOT NULL"
+    )
+    con.commit()
+    return con.execute("SELECT COUNT(*) FROM training").fetchone()[0]
+
+
+def prune_articles(con, days, keep_sources=()):
+    """Borra articulos mas viejos que `days`, conservando las fuentes de backlog."""
+    cutoff = int(time.time() - days * 86400)
+    keep = [s for s in keep_sources if s]
+    if keep:
+        placeholders = ",".join("?" for _ in keep)
+        cur = con.execute(
+            f"DELETE FROM articles WHERE ts < ? AND source NOT IN ({placeholders})",
+            (cutoff, *keep),
+        )
+    else:
+        cur = con.execute("DELETE FROM articles WHERE ts < ?", (cutoff,))
+    con.commit()
+    return cur.rowcount
 
 
 def prune_content(con, days=60):

@@ -6,6 +6,7 @@
 
 port: 3010
 cycle_hours: 2
+retention_days: 3      # se borran articulos mas viejos (salvo fuentes de backlog)
 
 # --- relevancia (tu gusto) ---
 threshold: 0.58          # score minimo de relevancia para entrar

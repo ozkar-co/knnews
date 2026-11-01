@@ -141,6 +141,7 @@ DEFAULTS = {
     "host": HOST,
     "port": int(_port_env),
     "cycle_hours": 2,
+    "retention_days": 7,
     "threshold": 0.35,
     "knn_k": 15,
     "topic_floor": 0.12,
