@@ -4,7 +4,7 @@ import json
 import re
 from email.utils import formatdate
 
-from . import config, ephemeris, store
+from . import config, ephemeris, fulltext, store
 
 STOPWORDS = {
     "para", "como", "este", "esta", "esto", "sobre", "desde", "hasta", "entre",
@@ -89,22 +89,28 @@ def build_rss(channel_title, channel_desc, self_link, items):
     return "\n".join(out)
 
 
-def _decorate(art):
+def _decorate(art, min_chars=0):
     try:
         flags = json.loads(art.get("flags") or "{}")
     except (ValueError, TypeError):
         flags = {}
     if flags.get("hard_excluded"):
         return None
+    # LWN marca con [$] el contenido solo para suscriptores: no es completo.
+    if art.get("source") == "lwn" and (art.get("title") or "").strip().startswith("[$]"):
+        return None
+    text = art.get("content") or art.get("summary") or ""
+    if fulltext.text_length(text) < min_chars:
+        return None
     art["_combined"] = 0.6 * (art.get("score") or 0.0) + 0.4 * (art.get("importance") or 0.0)
     return art
 
 
-def _prepare(candidates):
-    """Descarta excluidos, deduplica por evento y puntua para ordenar."""
+def _prepare(candidates, min_chars=0):
+    """Descarta excluidos/teasers, deduplica por evento y puntua para ordenar."""
     best = {}
     for raw in candidates:
-        art = _decorate(raw)
+        art = _decorate(raw, min_chars)
         if art is None:
             continue
         key = art.get("cluster_id") or f"a{art['id']}"
@@ -146,11 +152,14 @@ def publish(con, settings, log=print):
     config.FEEDS_DIR.mkdir(parents=True, exist_ok=True)
     threshold = float(settings.get("threshold", 0.32))
     importance_threshold = float(settings.get("importance_threshold", 0.50))
+    min_chars = int(settings.get("min_content_chars", 600))
     limit = int(settings.get("feeds_limit", 80))
     max_per_source = int(settings.get("max_per_source", 8))
     base = settings["base_url"].rstrip("/")
 
-    ranked = _prepare(store.feed_candidates(con, threshold, importance_threshold))
+    ranked = _prepare(
+        store.feed_candidates(con, threshold, importance_threshold), min_chars
+    )
     by_topic = {}
     for art in ranked:
         by_topic.setdefault(art.get("topic") or "otros", []).append(art)
@@ -180,7 +189,7 @@ def publish(con, settings, log=print):
         min_rel = int(settings.get("backlog_min_relevance", 2))
         for source in backlog_sources:
             for raw in store.backlog_candidates(con, source, per, min_rel):
-                art = _decorate(raw)
+                art = _decorate(raw, min_chars)
                 if art is None:
                     continue
                 art["topic"] = source_topic.get(source, art.get("topic") or "otros")
@@ -207,7 +216,7 @@ def publish(con, settings, log=print):
         if slug == "colombia" and local_sources:
             local = []
             for raw in store.local_candidates(con, local_sources, 400):
-                art = _decorate(raw)
+                art = _decorate(raw, min_chars)
                 if art is None:
                     continue
                 title = art.get("title") or ""
@@ -236,7 +245,7 @@ def publish(con, settings, log=print):
                     continue
                 counts[source] = counts.get(source, 0) + 1
                 picked.append(art)
-            items = _prepare(list(items) + picked)
+            items = _prepare(list(items) + picked, min_chars)
         topic_picks = [a for a in picks if a.get("topic") == slug]
         selected = _take(items, max(0, limit - len(topic_picks)), max_per_source)
         selected += topic_picks[: max(0, limit - len(selected))]

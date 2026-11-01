@@ -155,6 +155,7 @@ DEFAULTS = {
     "fulltext_timeout": 20,
     "fulltext_max_chars": 300000,
     "content_mode": {"default": "feed", "page": [], "feed": []},
+    "min_content_chars": 600,
     "backlog_sources": [],
     "backlog_per_source": 2,
     "backlog_min_relevance": 2,

@@ -70,6 +70,9 @@ content_mode:
     - technologyreview
     - enriquedans
 
+# contenido minimo (texto) para publicar: evita teasers de un parrafo
+min_content_chars: 600
+
 # fuentes de archivo: se van soltando articulos viejos poco a poco en su tema
 backlog_sources: [danluu, jvns]
 backlog_per_source: 2

@@ -107,9 +107,16 @@ garantiza presencia de las fuentes locales configuradas en `local_sources`.
 ## Contenido completo
 
 Los feeds emiten `<content:encoded>` (lo que newsboat muestra sin salir del
-lector). Para fuentes que solo publican un teaser, `fulltext` descarga la pagina
-del articulo y extrae los parrafos del cuerpo. `fulltext` bloquea IPs
-privadas/loopback (proteccion SSRF).
+lector). Cada fuente declara su estrategia en `interests.yaml`:
+
+- `feed`: el RSS ya trae el articulo completo (danluu, jvns, lwn…); no se scrapea.
+- `page`: el RSS trae teaser/parcial (Ars, Verge, Phys.org…); se descarga la pagina
+  y se extrae el cuerpo.
+
+Se eliminan los CTAs ("read more", "leer mas", newsletters) y **no se publica
+ningun articulo con menos de `min_content_chars` (600) caracteres de texto**: si no
+se pudo obtener el articulo completo, se descarta en vez de mostrar un teaser.
+`fulltext` bloquea IPs privadas/loopback (proteccion SSRF).
 
 ## Perfil y entrenamiento
 
