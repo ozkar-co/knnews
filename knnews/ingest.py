@@ -75,7 +75,9 @@ def fetch_feed(url, tag):
             content_html = entry["content"][0].get("value", "")
         if not content_html:
             content_html = entry.get("summary", "")
-        content_html = fulltext.strip_cta(content_html)[:max_chars]
+        content_html = fulltext.sanitize_html(fulltext.strip_cta(content_html))[
+            :max_chars
+        ]
 
         summary = clean_html(fulltext.strip_cta(entry.get("summary", "")))
         if not summary and content_html:
@@ -180,7 +182,7 @@ def enrich_fulltext(con, log=print):
             except Exception:  # noqa: BLE001 - un fallo puntual no aborta
                 body = None
             if body:
-                body = fulltext.strip_cta(body)
+                body = fulltext.sanitize_html(fulltext.strip_cta(body))
             if body and (
                 mode == "page"
                 or fulltext.text_length(body) > fulltext.text_length(existing)

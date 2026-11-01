@@ -116,6 +116,8 @@ lector). Cada fuente declara su estrategia en `interests.yaml`:
 Se eliminan los CTAs ("read more", "leer mas", newsletters) y **no se publica
 ningun articulo con menos de `min_content_chars` (600) caracteres de texto**: si no
 se pudo obtener el articulo completo, se descarta en vez de mostrar un teaser.
+El contenido se publica **solo texto**: se quitan imagenes/video y los enlaces se
+convierten en su texto (sin URLs).
 `fulltext` bloquea IPs privadas/loopback (proteccion SSRF).
 
 ## Perfil y entrenamiento

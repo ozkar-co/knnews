@@ -67,6 +67,41 @@ def strip_cta(html):
     return html
 
 
+MEDIA_BLOCK_RE = re.compile(
+    r"<(script|style|noscript|iframe|video|audio|svg|picture|figure|object)\b[^>]*>"
+    r".*?</\1>",
+    re.IGNORECASE | re.DOTALL,
+)
+MEDIA_TAG_RE = re.compile(
+    r"<(img|source|track|embed|object|picture)\b[^>]*>", re.IGNORECASE
+)
+ANCHOR_RE = re.compile(r"<a\b[^>]*>(.*?)</a>", re.IGNORECASE | re.DOTALL)
+EMPTY_ANCHOR_RE = re.compile(r"<a\b[^>]*>\s*</a>", re.IGNORECASE)
+URL_RE = re.compile(r"https?://[^\s<>\"']+", re.IGNORECASE)
+COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
+EMPTY_TAG_RE = re.compile(
+    r"<(p|div|span|li|ul|ol|h[1-6]|section|article)\b[^>]*>\s*</\1>",
+    re.IGNORECASE,
+)
+
+
+def sanitize_html(html):
+    """Deja solo texto: sin imagenes/video ni enlaces (conserva el texto)."""
+    if not html:
+        return ""
+    html = COMMENT_RE.sub("", html)
+    html = MEDIA_BLOCK_RE.sub("", html)
+    html = MEDIA_TAG_RE.sub("", html)
+    html = ANCHOR_RE.sub(r"\1", html)
+    html = EMPTY_ANCHOR_RE.sub("", html)
+    html = URL_RE.sub("", html)
+    for _ in range(2):
+        html = EMPTY_TAG_RE.sub("", html)
+    html = html.replace("&nbsp;", " ")
+    html = re.sub(r">\s+<", "><", html)
+    return html.strip()
+
+
 def _is_public_host(host):
     try:
         infos = socket.getaddrinfo(host, None)

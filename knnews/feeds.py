@@ -74,7 +74,8 @@ def build_rss(channel_title, channel_desc, self_link, items):
                 "</small></p>"
             )
         summary = f"<p>{_esc(art.get('summary'))}</p>" if art.get("summary") else ""
-        full = art.get("content") or summary
+        summary = fulltext.sanitize_html(summary)
+        full = fulltext.sanitize_html(art.get("content") or summary)
         out += [
             "<item>",
             f"<title>{_esc(art.get('title'))}</title>",
