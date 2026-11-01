@@ -22,9 +22,49 @@ BOILERPLATE_RE = re.compile(
     r"science x|provided by|citation:|doi:|journal information|explore further|"
     r"more information|this document is subject to copyright|"
     r"apart from any fair dealing|the content is provided for information|"
-    r"reprinted|image credit|credit:|story source|source:)",
+    r"reprinted|image credit|credit:|story source|source:|"
+    r"read more|read the full|read the entire|read the complete|full text|"
+    r"continue reading|full story|leer m[aá]s|sigue leyendo|contin[uú]a leyendo|"
+    r"posts from this topic|daily email digest|sign up|subscribe|newsletter|"
+    r"follow us|share this|advertisement|related stories|"
+    r"the post .* appeared first)",
     re.IGNORECASE,
 )
+
+CTA_RE = re.compile(
+    r"(read (the )?(full|more|entire|rest|complete)|continue reading|full story|"
+    r"leer (m[aá]s|la nota|el art[ií]culo|completo)|sigue leyendo|"
+    r"contin[uú]a leyendo|ver (la )?nota completa|posts from this topic|"
+    r"daily email digest|newsletter|sign up for|subscribe to)",
+    re.IGNORECASE,
+)
+
+
+def text_length(html):
+    text = re.sub(r"<[^>]+>", " ", html or "")
+    return len(" ".join(text.split()))
+
+
+def strip_cta(html):
+    """Quita parrafos/enlaces tipo 'read more / leer mas' del contenido."""
+    if not html:
+        return ""
+
+    def repl_paragraph(match):
+        inner = match.group(1)
+        text = " ".join(re.sub(r"<[^>]+>", " ", inner).split())
+        if CTA_RE.search(text) and len(text) < 200:
+            return ""
+        return match.group(0)
+
+    html = re.sub(r"<p[^>]*>(.*?)</p>", repl_paragraph, html, flags=re.I | re.S)
+    html = re.sub(
+        r"<a[^>]*>([^<]{0,120})</a>",
+        lambda m: "" if CTA_RE.search(m.group(1) or "") else m.group(0),
+        html,
+        flags=re.I,
+    )
+    return html
 
 
 def _is_public_host(host):

@@ -75,9 +75,9 @@ def fetch_feed(url, tag):
             content_html = entry["content"][0].get("value", "")
         if not content_html:
             content_html = entry.get("summary", "")
-        content_html = content_html[:max_chars]
+        content_html = fulltext.strip_cta(content_html)[:max_chars]
 
-        summary = clean_html(entry.get("summary"))
+        summary = clean_html(fulltext.strip_cta(entry.get("summary", "")))
         if not summary and content_html:
             summary = clean_html(content_html)
 
@@ -131,15 +131,23 @@ def embed_pending(con, log=print):
     return len(rows)
 
 
+def _content_mode(source, settings):
+    cm = settings.get("content_mode") or {}
+    if source in (cm.get("page") or []):
+        return "page"
+    if source in (cm.get("feed") or []):
+        return "feed"
+    return cm.get("default", "feed")
+
+
 def enrich_fulltext(con, log=print):
-    """Descarga el articulo completo de las fuentes que solo dan encabezado."""
+    """Completa el texto segun la estrategia de cada fuente (sin umbral global)."""
     settings = config.settings()
     if not settings.get("fulltext", True):
         return 0
-    min_chars = int(settings.get("fulltext_min_chars", 900))
-    rows = store.articles_needing_fulltext(con, min_chars, limit=400)
+    rows = store.articles_needing_fulltext(con, limit=400)
     if not rows:
-        log("no hay articulos que necesiten texto completo")
+        log("no hay articulos pendientes de texto completo")
         return 0
 
     by_host = defaultdict(list)
@@ -147,13 +155,20 @@ def enrich_fulltext(con, log=print):
         host = urlsplit(row["link"]).netloc.lower()
         by_host[host].append(row)
 
-    log(f"buscando texto completo: {len(rows)} pendientes en {len(by_host)} hosts")
+    log(f"texto completo: {len(rows)} pendientes en {len(by_host)} hosts")
     fetched = 0
     attempted = 0
-    per_host = 25
+    per_host = 80
     for host, items in by_host.items():
-        delay = 2.5 if "phys.org" in host else 0.8
+        delay = 1.5 if "phys.org" in host else 0.8
         for row in items[:per_host]:
+            source = row.get("source") or ""
+            existing = row.get("content") or ""
+            mode = _content_mode(source, settings)
+            if mode == "feed" and fulltext.text_length(existing) >= 250:
+                # el feed ya trae el articulo completo; no se scrapea
+                store.record_fulltext(con, row["id"], None, True)
+                continue
             attempted += 1
             body = None
             try:
@@ -164,12 +179,15 @@ def enrich_fulltext(con, log=print):
                     break
             except Exception:  # noqa: BLE001 - un fallo puntual no aborta
                 body = None
-            existing = row.get("content") or ""
-            if body and len(body) > len(existing):
+            if body:
+                body = fulltext.strip_cta(body)
+            if body and (
+                mode == "page"
+                or fulltext.text_length(body) > fulltext.text_length(existing)
+            ):
                 store.record_fulltext(con, row["id"], body, True)
                 fetched += 1
             elif body:
-                # la pagina no aporta mas que el feed: damos por hecho el articulo
                 store.record_fulltext(con, row["id"], None, True)
             else:
                 # fallo transitorio: se reintenta en ciclos posteriores (max 5)

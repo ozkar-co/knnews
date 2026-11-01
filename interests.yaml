@@ -41,8 +41,46 @@ local_per_source: 2
 
 # --- texto completo ---
 fulltext: true
-fulltext_min_chars: 900
 fulltext_timeout: 20
+
+# Estrategia por fuente (diagnostico real):
+#   feed: el RSS ya trae el articulo completo; NO se scrapea (evita pisarlo).
+#   page: el RSS trae teaser/parcial; se extrae el cuerpo de la pagina.
+content_mode:
+  default: feed
+  page:
+    - arstechnica
+    - bbc/europa
+    - bleepingcomputer
+    - eje21
+    - eldiario-local
+    - eltiempo/colombia
+    - filfre
+    - france24/europa
+    - physorg
+    - quantamagazine
+    - schneier
+    - techcrunch/ai
+    - thehackernews
+    - theverge/ai
+  feed:
+    - danluu
+    - jvns
+    - lwn
+    - technologyreview
+    - enriquedans
+
+# fuentes de archivo: se van soltando articulos viejos poco a poco en su tema
+backlog_sources: [danluu, jvns]
+backlog_per_source: 2
+backlog_min_relevance: 2
+
+# --- efemerides astronomicas (se publican en tema-ciencia) ---
+ephemeris: true
+ephemeris_city: Pereira
+ephemeris_lat: 4.8133
+ephemeris_lon: -75.6961
+ephemeris_tz: America/Bogota
 
 # --- descartados suaves (restan score; los duros van por dominio) ---
 dislikes:

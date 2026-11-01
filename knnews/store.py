@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS articles (
     llm_topic     TEXT,
     llm_flags     TEXT,
     bootstrap_at  TEXT,
+    backlog_at    TEXT,
     label         INTEGER,
     labeled_at    TEXT,
     seen_at       TEXT,
@@ -99,6 +100,7 @@ def _migrate(con):
         ("llm_topic", "ALTER TABLE articles ADD COLUMN llm_topic TEXT"),
         ("llm_flags", "ALTER TABLE articles ADD COLUMN llm_flags TEXT"),
         ("bootstrap_at", "ALTER TABLE articles ADD COLUMN bootstrap_at TEXT"),
+        ("backlog_at", "ALTER TABLE articles ADD COLUMN backlog_at TEXT"),
     ):
         if column not in columns:
             con.execute(ddl)
@@ -141,24 +143,28 @@ def upsert_article(con, art, vector=None):
     )
     inserted = cur.rowcount > 0
     if not inserted:
-        # rellena el contenido de articulos ya existentes que no lo tenian
-        con.execute(
-            "UPDATE articles SET content = ? WHERE guid = ? AND content IS NULL AND ? IS NOT NULL",
-            (art.get("content"), art["guid"], art.get("content")),
-        )
+        # refresca el contenido si el feed trae mas que lo almacenado
+        # (repara textos que el scraping viejo dejo cortos; nunca acorta)
+        new_content = art.get("content")
+        if new_content:
+            con.execute(
+                "UPDATE articles SET content = ? WHERE guid = ? "
+                "AND (content IS NULL OR length(content) < length(?))",
+                (new_content, art["guid"], new_content),
+            )
     con.commit()
     return inserted
 
 
-def articles_needing_fulltext(con, min_chars, limit=200):
+def articles_needing_fulltext(con, limit=400):
     return [
         dict(row)
         for row in con.execute(
-            """SELECT id, link, content FROM articles
-               WHERE link != '' AND COALESCE(fulltext_tries, 0) < 5
-                 AND (content IS NULL OR length(content) < ?)
+            """SELECT id, link, content, source FROM articles
+               WHERE link != '' AND fulltext_at IS NULL
+                 AND COALESCE(fulltext_tries, 0) < 5
                ORDER BY ts DESC LIMIT ?""",
-            (min_chars, limit),
+            (limit,),
         )
     ]
 
@@ -167,7 +173,7 @@ def record_fulltext(con, article_id, content, ok):
     if ok:
         con.execute(
             """UPDATE articles SET content = COALESCE(?, content),
-               fulltext_at = ?, fulltext_tries = 3 WHERE id = ?""",
+               fulltext_at = ?, fulltext_tries = 5 WHERE id = ?""",
             (content, now(), article_id),
         )
     else:
@@ -313,6 +319,33 @@ def local_candidates(con, sources, limit=300):
         (*sources, limit),
     ).fetchall()
     return [dict(row) for row in rows]
+
+
+def backlog_candidates(con, source, per_source, min_llm_relevance):
+    """Articulos viejos de una fuente de archivo que aun no se han soltado."""
+    return [
+        dict(row)
+        for row in con.execute(
+            """SELECT id, guid, source, title, link, summary, content, ts, topic,
+                      score, importance, flags, cluster_id, cluster_sources, label,
+                      llm_relevance, llm_flags
+               FROM articles
+               WHERE source = ? AND vector IS NOT NULL AND classified_at IS NOT NULL
+                 AND backlog_at IS NULL AND COALESCE(llm_relevance, 0) >= ?
+               ORDER BY ts ASC LIMIT ?""",
+            (source, min_llm_relevance, per_source),
+        )
+    ]
+
+
+def mark_backlog(con, ids):
+    if not ids:
+        return
+    stamp = now()
+    con.executemany(
+        "UPDATE articles SET backlog_at = ? WHERE id = ?", [(stamp, i) for i in ids]
+    )
+    con.commit()
 
 
 def set_importance(con, article_id, importance, cluster_id, cluster_sources):

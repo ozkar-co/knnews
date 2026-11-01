@@ -4,7 +4,7 @@ import json
 import re
 from email.utils import formatdate
 
-from . import config, store
+from . import config, ephemeris, store
 
 STOPWORDS = {
     "para", "como", "este", "esta", "esto", "sobre", "desde", "hasta", "entre",
@@ -65,11 +65,14 @@ def build_rss(channel_title, channel_desc, self_link, items):
         )
         score = art.get("score") or 0.0
         importance = art.get("importance") or 0.0
-        foot = (
-            f"<p><small>[{_esc(art.get('source'))} · "
-            f"{_esc(art.get('topic'))} · rel {score:.2f} · imp {importance:.2f}]"
-            "</small></p>"
-        )
+        if art.get("synthetic"):
+            foot = ""
+        else:
+            foot = (
+                f"<p><small>[{_esc(art.get('source'))} · "
+                f"{_esc(art.get('topic'))} · rel {score:.2f} · imp {importance:.2f}]"
+                "</small></p>"
+            )
         summary = f"<p>{_esc(art.get('summary'))}</p>" if art.get("summary") else ""
         full = art.get("content") or summary
         out += [
@@ -169,17 +172,38 @@ def publish(con, settings, log=print):
         )
         log(f"  feed {slug}: {len(items)} articulos")
 
+    source_topic = settings.get("source_topic") or {}
+    backlog_sources = settings.get("backlog_sources") or []
+    picks = []
+    if backlog_sources:
+        per = int(settings.get("backlog_per_source", 2))
+        min_rel = int(settings.get("backlog_min_relevance", 2))
+        for source in backlog_sources:
+            for raw in store.backlog_candidates(con, source, per, min_rel):
+                art = _decorate(raw)
+                if art is None:
+                    continue
+                art["topic"] = source_topic.get(source, art.get("topic") or "otros")
+                picks.append(art)
+        if picks:
+            log(f"  backlog: {len(picks)} articulos viejos")
+
+    todo_items = _take(ranked, max(0, limit - len(picks)), max_per_source)
+    todo_items += picks[: max(0, limit - len(todo_items))]
     _write(
         "todo",
         "knnews · todo relevante",
         "Articulos relevantes e importantes, todos los temas.",
-        _take(ranked, limit, max_per_source),
+        todo_items,
     )
     local_sources = settings.get("local_sources") or []
-    local_per_source = int(settings.get("local_per_source", 3))
+    local_per_source = int(settings.get("local_per_source", 2))
+    eph = ephemeris.daily_item(settings)
     for topic in settings["topics"]:
         slug = topic["slug"]
         items = list(by_topic.get(slug, []))
+        if slug == "ciencia" and eph:
+            items = [eph] + items
         if slug == "colombia" and local_sources:
             local = []
             for raw in store.local_candidates(con, local_sources, 400):
@@ -213,13 +237,18 @@ def publish(con, settings, log=print):
                 counts[source] = counts.get(source, 0) + 1
                 picked.append(art)
             items = _prepare(list(items) + picked)
-        selected = _take(items, limit, max_per_source)
+        topic_picks = [a for a in picks if a.get("topic") == slug]
+        selected = _take(items, max(0, limit - len(topic_picks)), max_per_source)
+        selected += topic_picks[: max(0, limit - len(selected))]
         _write(
             f"tema-{slug}",
             f"knnews · {topic['name']}",
             f"Articulos de {topic['name']}.",
             selected,
         )
+
+    if picks:
+        store.mark_backlog(con, [a["id"] for a in picks])
 
     config.MANIFEST_PATH.write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
